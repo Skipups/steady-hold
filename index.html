@@ -86,6 +86,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;b
         <label>Service UUID<input id="uSvc" value="0000aa41-0000-1000-8000-00805f9b34fb"></label>
         <label>Byte order<select id="uEnd"><option value="be">Big-endian</option><option value="le">Little-endian</option></select></label>
       </div>
+      <label style="display:flex;align-items:center;gap:10px;margin-top:10px;color:var(--ink)"><input id="uAll" type="checkbox" style="width:22px;min-height:22px"> Show all Bluetooth devices when connecting</label>
       <p class="raw" id="raw">raw: —</p>
     </details>
   </div>
@@ -117,24 +118,42 @@ function parse(dv){
 }
 async function connect(){
   if(!navigator.bluetooth){setMsg('This browser has no Bluetooth. Open this page in Bluefy on iPhone, or Chrome on Android/desktop.');return}
+  let step='start';
+  const log=t=>{step=t;$('raw').textContent='step: '+t;setStatus(t)};
   try{
-    const svc=$('uSvc').value.trim().toLowerCase();
-    setStatus('Choosing device…');
-    const dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'Perifit'}],optionalServices:[svc,0xaa41]});
+    let svc=$('uSvc').value.trim().toLowerCase().replace(/^0x/,'');
+    if(/^[0-9a-f]{4}$/.test(svc))svc='0000'+svc+'-0000-1000-8000-00805f9b34fb';
+    const short='0000aa41-0000-1000-8000-00805f9b34fb';
+    const svcs=[...new Set([svc,short])];
+    log('1/5 choosing device');
+    const opts=$('uAll').checked?{acceptAllDevices:true,optionalServices:svcs}:{filters:[{namePrefix:'Perifit'},{services:[short]}],optionalServices:svcs};
+    const dev=await navigator.bluetooth.requestDevice(opts);
     dev.addEventListener('gattserverdisconnected',()=>{connected=false;setStatus('Disconnected');refresh()});
+    log('2/5 connecting to '+(dev.name||'device'));
     const gatt=await dev.gatt.connect();
+    log('3/5 finding service');
+    let services=[];
+    for(const u of svcs){try{services.push(await gatt.getPrimaryService(u))}catch(e){}}
+    if(!services.length){try{services=await gatt.getPrimaryServices()}catch(e){}}
+    if(!services.length) throw new Error('Connected, but no matching service. Paste the service UUID from a BLE scanner app into Device & debug.');
+    log('4/5 finding data channel');
     let chr=null;
-    const services=await gatt.getPrimaryServices();
     for(const s of services){
-      for(const c of await s.getCharacteristics()){ if(c.properties.notify&&!chr) chr=c; }
+      let cs=[];try{cs=await s.getCharacteristics()}catch(e){}
+      for(const c of cs){ if(c.properties.notify&&!chr) chr=c; }
     }
-    if(!chr) throw new Error('No notifying characteristic found. Check the service UUID in Device & debug.');
+    if(!chr) throw new Error('No notifying characteristic found.');
     chr.addEventListener('characteristicvaluechanged',e=>parse(e.target.value));
+    log('5/5 starting data');
     await chr.startNotifications();
     connected=true; demo=false; cal=store.get('cal',{rest:0,max:0}); raw=0; smooth=0;
     setStatus('Connected: '+(dev.name||'Perifit'));
     setMsg(cal.max>cal.rest?'Connected. Start a set, or recalibrate if it feels off.':'Connected. Calibrate first: relax, then squeeze as hard as you comfortably can.');
-  }catch(e){setStatus('Not connected');setMsg('Could not connect: '+e.message)}
+  }catch(e){
+    const why=(e&&(e.message||e.name))||String(e);
+    setStatus('Not connected (failed at '+step+')');
+    setMsg('Could not connect at step '+step+': '+why);
+  }
   refresh();
 }
 
