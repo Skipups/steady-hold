@@ -68,8 +68,9 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;b
         <label>Hold (sec)<input id="sHold" type="number" min="2" max="120" value="10"></label>
         <label>Rest (sec)<input id="sRest" type="number" min="2" max="120" value="10"></label>
         <label>Reps<input id="sReps" type="number" min="1" max="30" value="6"></label>
-        <label>Zone width<select id="sWidth"><option value="15">Narrow</option><option value="25" selected>Medium</option><option value="40">Wide</option></select></label>
-        <label>Zone low (% max)<input id="sLo" type="number" min="5" max="90" value="40"></label>
+        <label>Mode<select id="sMode"><option value="above" selected>Strength: stay above line</option><option value="band">Control: stay between lines</option></select></label>
+        <label>Target (% of max)<input id="sLo" type="number" min="5" max="95" value="60"></label>
+        <label id="wWrap">Band width<select id="sWidth"><option value="15">Narrow</option><option value="25" selected>Medium</option><option value="40">Wide</option></select></label>
         <label>Sensor<select id="sCh"><option value="max">Max of both</option><option value="base">Base</option><option value="tip">Tip</option></select></label>
       </div>
     </details>
@@ -102,10 +103,11 @@ let packets=0, chrName='', raw=0, smooth=0, connected=false, demo=false, demoDow
 let cal=store.get('cal',{rest:0,max:0});
 const trace=[]; // {t,v}
 let game={mode:'idle'};
-const settingsIds=['sHold','sRest','sReps','sWidth','sLo','sCh','uSvc','uEnd'];
-const saved=store.get('settings',{});if(/aa41/.test(saved.uSvc||''))delete saved.uSvc;
+const settingsIds=['sHold','sRest','sReps','sMode','sWidth','sLo','sCh','uSvc','uEnd'];
+const saved=store.get('settings',{});if(/aa41/.test(saved.uSvc||''))delete saved.uSvc;if(saved.sLo==='40'&&!saved.sMode)saved.sLo='60';
 settingsIds.forEach(id=>{if(saved[id]!=null)$(id).value=saved[id];$(id).addEventListener('change',()=>{const o={};settingsIds.forEach(i=>o[i]=$(i).value);store.set('settings',o)})});
-const S=()=>({hold:+$('sHold').value,rest:+$('sRest').value,reps:+$('sReps').value,lo:+$('sLo').value,hi:Math.min(100,+$('sLo').value+ +$('sWidth').value)});
+const S=()=>{const m=$('sMode').value,lo=+$('sLo').value;return{mode:m,hold:+$('sHold').value,rest:+$('sRest').value,reps:+$('sReps').value,lo,hi:m==='above'?999:Math.min(100,lo+ +$('sWidth').value)}};
+const syncMode=()=>{$('wWrap').style.display=$('sMode').value==='band'?'':'none'};$('sMode').addEventListener('change',syncMode);syncMode();
 const norm=v=>cal.max>cal.rest?Math.max(0,Math.min(1.3,(v-cal.rest)/(cal.max-cal.rest))):0;
 
 // ---------- bluetooth ----------
@@ -127,7 +129,9 @@ async function connect(){
     const short='0000aa40-0000-1000-8000-00805f9b34fb', dataUuid='0000aa41-0000-1000-8000-00805f9b34fb';
     const svcs=[...new Set([svc,short,dataUuid])];
     log('1/5 choosing device');
-    const opts=$('uAll').checked?{acceptAllDevices:true,optionalServices:svcs}:{filters:[{namePrefix:'Perifit'},{services:[short]}],optionalServices:svcs};
+    const known=store.get('devName','');
+    const opts=($('uAll').checked||!known)?{acceptAllDevices:true,optionalServices:svcs}:{filters:[{name:known},{namePrefix:'Perifit'},{namePrefix:'PERIFIT'},{services:[short]}],optionalServices:svcs};
+    if(!known)setMsg('Pick your Perifit from the list. Next time only it will show.');
     const dev=await navigator.bluetooth.requestDevice(opts);
     dev.addEventListener('gattserverdisconnected',()=>{connected=false;setStatus('Disconnected');refresh()});
     log('2/5 connecting to '+(dev.name||'device'));
@@ -151,11 +155,13 @@ async function connect(){
     chr.addEventListener('characteristicvaluechanged',e=>parse(e.target.value));
     log('5/5 starting data');
     await chr.startNotifications();
+    if(dev.name)store.set('devName',dev.name);
     connected=true; demo=false; cal=store.get('cal',{rest:0,max:0}); raw=0; smooth=0;
     setStatus('Connected: '+(dev.name||'Perifit'));
     setMsg(cal.max>cal.rest?'Connected. Start a set, or recalibrate if it feels off.':'Connected. Calibrate first: relax, then squeeze as hard as you comfortably can.');
   }catch(e){
     const why=(e&&(e.message||e.name))||String(e);
+    if(step.startsWith('1/5')&&/cancel|NotFound/i.test(why)){setStatus('Not connected');setMsg('No device chosen. If your Perifit wasn’t in the list, tick “Show all Bluetooth devices” in Device & debug and try again.');refresh();return}
     setStatus('Not connected (failed at '+step+')');
     setMsg('Could not connect at step '+step+': '+why);
   }
@@ -164,7 +170,7 @@ async function connect(){
 
 // ---------- demo (touch = squeeze) ----------
 const stage=$('stage');
-const down=e=>{e.preventDefault();demoDown=true;if(!connected&&!demo){demo=true;setStatus('Demo mode: press = squeeze');refresh()}};
+const down=e=>{e.preventDefault();demoDown=true;if(!connected&&!demo){demo=true;if(!(cal.max>cal.rest))cal={rest:200,max:1800};setStatus('Demo mode: press = squeeze');refresh()}};
 const up=()=>demoDown=false;
 stage.addEventListener('pointerdown',down);addEventListener('pointerup',up);addEventListener('pointercancel',up);
 
@@ -187,7 +193,7 @@ async function calibrate(){
 // ---------- the hold game ----------
 function startSet(){
   const s=S();
-  game={mode:'hold',rep:1,s,phaseEnd:performance.now()+s.hold*1000,inZone:0,total:0,streak:0,best:0,reps:[],lastT:performance.now(),graceT:0};
+  game={mode:'hold',rep:1,s,phaseEnd:performance.now()+s.hold*1000,inZone:0,total:0,streak:0,best:0,reps:[],lastT:performance.now(),graceT:0,inside:false};
   refresh();
 }
 function tickGame(now){
@@ -197,11 +203,12 @@ function tickGame(now){
   if(game.mode==='hold'){
     game.total+=dt;
     const inside=p>=s.lo&&p<=s.hi;
+    game.inside=inside;
     if(inside){game.inZone+=dt;game.streak+=dt;game.graceT=0}
     else{game.graceT+=dt;if(game.graceT>0.4)game.streak=0}
     game.best=Math.max(game.best,game.streak);
     const left=Math.max(0,(game.phaseEnd-now)/1000);
-    setMsg(inside?`Hold it… ${left.toFixed(0)}s`:p<s.lo?`A little stronger · ${left.toFixed(0)}s`:`Ease off slightly · ${left.toFixed(0)}s`);
+    setMsg(inside?`Squeeze & hold · ${Math.ceil(left)}s`:p<s.lo?`Squeeze harder! · ${Math.ceil(left)}s`:`A bit lighter · ${Math.ceil(left)}s`);
     if(now>=game.phaseEnd){
       game.reps.push({pct:Math.round(100*game.inZone/Math.max(game.total,.01)),best:+game.best.toFixed(1)});
       if(game.rep>=s.reps){finish();return}
@@ -209,7 +216,7 @@ function tickGame(now){
     }
   }else{
     const left=Math.ceil((game.phaseEnd-now)/1000);
-    setMsg(`Rep ${game.rep} done · relax fully · ${left}s`);
+    setMsg(`Relax completely · ${left}s · next: rep ${game.rep+1} of ${game.s.reps}`);
     if(now>=game.phaseEnd){game.rep++;game.mode='hold';game.phaseEnd=now+s.hold*1000;game.inZone=0;game.total=0;game.streak=0;game.best=0;game.graceT=0}
   }
 }
@@ -220,47 +227,56 @@ function finish(){
   const h=store.get('history',[]);
   h.unshift({d:new Date().toISOString(),hold:s.hold,reps:s.reps,zone:`${s.lo}–${s.hi}%`,avg,best});
   store.set('history',h.slice(0,200));
-  let tip=avg>=80?` Strong set! Try ${s.hold+2}s holds next time.`:avg<50?' Try a wider zone or shorter holds next time.':'';
-  if(avg>=80){$('sHold').value=s.hold+2;$('sHold').dispatchEvent(new Event('change'))}
-  setMsg(`Set done: ${avg}% time in zone, longest steady hold ${best}s.${tip}`);
+  let tip='';
+  if(avg>=80){
+    if(s.mode==='above'&&s.lo<85){$('sLo').value=s.lo+5;$('sLo').dispatchEvent(new Event('change'));tip=` Strong set! Target raised to ${s.lo+5}% for next time.`}
+    else{$('sHold').value=s.hold+2;$('sHold').dispatchEvent(new Event('change'));tip=` Strong set! Holds raised to ${s.hold+2}s for next time.`}
+  } else if(avg<50) tip=' Try a lower target or shorter holds next time.';
+  setMsg(`Set done: above target ${avg}% of the time, longest unbroken hold ${best}s.${tip}`);
   game={mode:'idle'};renderHist();refresh();
 }
 function renderHist(){
   const h=store.get('history',[]);
   if(!h.length){$('hist').innerHTML='<p class="note">No sets yet.</p>';return}
   const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
-  $('hist').innerHTML='<table><thead><tr><th>Date</th><th>Hold</th><th>Reps</th><th>In zone</th><th>Longest</th></tr></thead><tbody>'+
+  $('hist').innerHTML='<table><thead><tr><th>Date</th><th>Hold</th><th>Reps</th><th>On target</th><th>Longest</th></tr></thead><tbody>'+
     h.slice(0,30).map(r=>`<tr><td>${esc(new Date(r.d).toLocaleDateString(undefined,{month:'short',day:'numeric'}))}</td><td>${esc(r.hold)}s</td><td>${esc(r.reps)}</td><td>${esc(r.avg)}%</td><td>${esc(r.best)}s</td></tr>`).join('')+'</tbody></table>';
 }
 
 // ---------- drawing ----------
 const cv=$('cv'),cx=cv.getContext('2d');
-function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+const probe=document.createElement('i');probe.style.display='none';document.body.appendChild(probe);
+const cc={};function css(v){if(!cc[v]){probe.style.color=`var(${v})`;cc[v]=getComputedStyle(probe).color}return cc[v]}
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{for(const k in cc)delete cc[k]});
 function draw(){
   const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
   if(cv.width!==W*dpr){cv.width=W*dpr;cv.height=H*dpr}
   cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);
-  const top=78,bot=H-12,y=p=>bot-(bot-top)*Math.min(p,1.2)/1.2;
-  const s=S(); const showZone=game.mode==='hold'||game.mode==='rest'||game.mode==='idle';
-  const meterX=W-70;
-  // zone band
-  if(showZone&&cal.max>cal.rest){cx.fillStyle=css('--zone');cx.fillRect(0,y(s.hi/100),W,y(s.lo/100)-y(s.hi/100))}
-  // gridlines 25/50/75/100
+  const top=84,bot=H-14,right=W-18,y=p=>bot-(bot-top)*Math.min(p,1.2)/1.2;
+  const s=S(), hasCal=cal.max>cal.rest, now=performance.now();
+  // gridlines
   cx.strokeStyle=css('--line');cx.lineWidth=1;cx.fillStyle=css('--mut');cx.font='12px Inter,sans-serif';
-  [.25,.5,.75,1].forEach(g=>{cx.beginPath();cx.moveTo(0,y(g));cx.lineTo(meterX-10,y(g));cx.stroke();cx.fillText(g*100+'%',4,y(g)-4)});
-  // trace (last 10s)
-  const now=performance.now();
+  [.25,.5,.75,1].forEach(g=>{cx.beginPath();cx.moveTo(0,y(g));cx.lineTo(right,y(g));cx.stroke();cx.fillText(g*100+'%',4,y(g)-4)});
+  // target area + line
+  if(hasCal){
+    const yLo=y(s.lo/100), yHi=s.mode==='above'?top:y(s.hi/100);
+    cx.fillStyle=css('--zone');cx.fillRect(0,yHi,right,yLo-yHi);
+    cx.strokeStyle=css('--hot');cx.lineWidth=2;cx.setLineDash([6,5]);
+    cx.beginPath();cx.moveTo(0,yLo);cx.lineTo(right,yLo);cx.stroke();
+    if(s.mode==='band'){cx.beginPath();cx.moveTo(0,yHi);cx.lineTo(right,yHi);cx.stroke()}
+    cx.setLineDash([]);cx.fillStyle=css('--hot');cx.font='600 12px Inter,sans-serif';cx.textAlign='right';
+    cx.fillText('target '+s.lo+'%',right,yLo+16);cx.textAlign='left';
+  }
+  // trace: last 10s scrolling left, newest point at the right edge
   cx.strokeStyle=css('--plum');cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();
-  trace.forEach((pt,i)=>{const x=(meterX-14)*(1-(now-pt.t)/10000);const yy=y(pt.v);i?cx.lineTo(x,yy):cx.moveTo(x,yy)});cx.stroke();
-  // meter
-  const p=norm(smooth), inZone=p*100>=s.lo&&p*100<=s.hi;
-  cx.fillStyle=css('--line');roundRect(meterX,top,46,bot-top,14);cx.fill();
-  cx.fillStyle=game.mode==='hold'&&inZone?css('--hot'):css('--plum');
-  roundRect(meterX,y(p),46,bot-y(p),14);cx.fill();
+  trace.forEach((pt,i)=>{const x=right*(1-(now-pt.t)/10000);const yy=y(pt.v);i?cx.lineTo(x,yy):cx.moveTo(x,yy)});cx.stroke();
+  // current value dot
+  const p=norm(smooth), on=game.mode==='hold'&&game.inside;
+  cx.fillStyle=on?css('--hot'):css('--plum');cx.beginPath();cx.arc(right,y(p),9,0,7);cx.fill();
   // ring timer
   if(game.mode==='hold'||game.mode==='rest'){
     const dur=(game.mode==='hold'?game.s.hold:game.s.rest)*1000, frac=1-Math.max(0,game.phaseEnd-now)/dur;
-    const rx=W-48,ry=40,rr=24;
+    const rx=W-40,ry=38,rr=24;
     cx.lineWidth=6;cx.strokeStyle=css('--line');cx.beginPath();cx.arc(rx,ry,rr,0,7);cx.stroke();
     cx.strokeStyle=game.mode==='hold'?css('--hot'):css('--ok');cx.beginPath();cx.arc(rx,ry,rr,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);cx.stroke();
     cx.fillStyle=css('--ink');cx.font='600 13px Inter,sans-serif';cx.textAlign='center';cx.fillText(`${game.rep}/${game.s.reps}`,rx,ry+5);cx.textAlign='left';
@@ -292,7 +308,7 @@ function refresh(){
   $('bConn').disabled=connected||busy;
   $('bCal').disabled=!live||busy;
   $('bGo').disabled=!live||busy||!(cal.max>cal.rest);
-  $('bGo').textContent=busy&&game.mode!=='cal'?'In progress…':'Start set';
+  $('bGo').textContent=busy&&game.mode!=='cal'?'Running…':'Start set';
 }
 $('bConn').addEventListener('click',connect);
 $('bCal').addEventListener('click',calibrate);
