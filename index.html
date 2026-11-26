@@ -98,7 +98,6 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;b
         <label>Service UUID<input id="uSvc" value="0000aa40-0000-1000-8000-00805f9b34fb"></label>
         <label>Byte order<select id="uEnd"><option value="be">Big-endian</option><option value="le">Little-endian</option></select></label>
       </div>
-      <label style="display:flex;align-items:center;gap:10px;margin-top:10px;color:var(--ink)"><input id="uAll" type="checkbox" style="width:22px;min-height:22px"> Show all Bluetooth devices when connecting</label>
       <p class="raw" id="raw">raw: —</p>
     </details>
   </div>
@@ -110,7 +109,7 @@ const $=id=>document.getElementById(id);
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 
 // ---------- state ----------
-let pktTimes=[], calInfo=null, packets=0, chrName='', raw=0, smooth=0, connected=false, demo=false, demoDown=false;
+let lastDev=null, pktTimes=[], calInfo=null, packets=0, chrName='', raw=0, smooth=0, connected=false, demo=false, demoDown=false;
 let cal=store.get('cal',{rest:0,max:0});
 const trace=[]; // {t,v}
 let game={mode:'idle'};
@@ -151,14 +150,27 @@ async function connect(){
     if(/^[0-9a-f]{4}$/.test(svc))svc='0000'+svc+'-0000-1000-8000-00805f9b34fb';
     const short='0000aa40-0000-1000-8000-00805f9b34fb', dataUuid='0000aa41-0000-1000-8000-00805f9b34fb';
     const svcs=[...new Set([svc,short,dataUuid])];
-    log('1/5 choosing device');
+    // Bluefy's name/service filters don't match the Perifit, so never filter.
+    // Instead, reuse a device we already have permission for, so no picker is needed.
+    let dev=null, gatt=null;
     const known=store.get('devName','');
-    const opts=($('uAll').checked||!known)?{acceptAllDevices:true,optionalServices:svcs}:{filters:[{name:known},{namePrefix:'Perifit'},{namePrefix:'PERIFIT'},{services:[short]}],optionalServices:svcs};
-    if(!known)setMsg('Pick your Perifit from the list. Next time only it will show.');
-    const dev=await navigator.bluetooth.requestDevice(opts);
-    dev.addEventListener('gattserverdisconnected',()=>{connected=false;setStatus('Disconnected');refresh()});
-    log('2/5 connecting to '+(dev.name||'device'));
-    const gatt=await dev.gatt.connect();
+    if(!lastDev&&navigator.bluetooth.getDevices){
+      try{const list=await navigator.bluetooth.getDevices();lastDev=list.find(d=>d.id===store.get('devId',''))||list.find(d=>known&&d.name===known)||null}catch(e){}
+    }
+    if(lastDev){
+      log('2/5 reconnecting to '+(lastDev.name||'Perifit'));
+      try{gatt=await Promise.race([lastDev.gatt.connect(),new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),6000))]);dev=lastDev}
+      catch(e){lastDev=null;setStatus('Not connected');setMsg('Couldn’t reach your Perifit. Check it’s on (light blinking), then tap Connect again to pick it.');refresh();return}
+    }
+    if(!gatt){
+      log('1/5 choosing device');
+      setMsg(known?`Pick “${known}” from the list.`:'Pick your Perifit from the list.');
+      dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:svcs});
+      log('2/5 connecting to '+(dev.name||'device'));
+      gatt=await dev.gatt.connect();
+    }
+    lastDev=dev;
+    if(!dev._lpListen){dev._lpListen=true;dev.addEventListener('gattserverdisconnected',()=>{connected=false;setStatus('Disconnected. Tap Connect to reconnect.');refresh()})}
     log('3/5 finding service');
     let services=[];
     for(const u of svcs){try{services.push(await gatt.getPrimaryService(u))}catch(e){}}
@@ -175,16 +187,17 @@ async function connect(){
     }
     chrName='data '+chr?.uuid?.slice(4,8)+' in service '+chr?.service?.uuid?.slice(4,8);
     if(!chr) throw new Error('No notifying characteristic found.');
-    chr.addEventListener('characteristicvaluechanged',e=>parse(e.target.value));
+    if(!chr._lpListen){chr._lpListen=true;chr.addEventListener('characteristicvaluechanged',e=>parse(e.target.value))}
     log('5/5 starting data');
     await chr.startNotifications();
     if(dev.name)store.set('devName',dev.name);
+    if(dev.id)store.set('devId',dev.id);
     connected=true; demo=false; cal=store.get('cal',{rest:0,max:0}); if(cal.ch!==$('sCh').value)cal={rest:0,max:0}; raw=0; smooth=0; syncGrams();
     setStatus('Connected: '+(dev.name||'Perifit'));
     setMsg(cal.max>cal.rest?'Connected. Start a set, or recalibrate if it feels off.':'Connected. Calibrate first: relax, then squeeze as hard as you comfortably can.');
   }catch(e){
     const why=(e&&(e.message||e.name))||String(e);
-    if(step.startsWith('1/5')&&/cancel|NotFound/i.test(why)){setStatus('Not connected');setMsg('No device chosen. If your Perifit wasn’t in the list, tick “Show all Bluetooth devices” in Device & debug and try again.');refresh();return}
+    if(step.startsWith('1/5')&&/cancel|NotFound/i.test(why)){setStatus('Not connected');setMsg('No device chosen. Make sure the Perifit is on (light blinking) and the Perifit app is closed, then tap Connect.');refresh();return}
     setStatus('Not connected (failed at '+step+')');
     setMsg('Could not connect at step '+step+': '+why);
   }
