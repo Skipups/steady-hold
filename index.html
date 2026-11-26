@@ -38,7 +38,7 @@ input,select{font:16px Inter,sans-serif;min-height:44px;border-radius:10px;borde
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 details summary{cursor:pointer;font-weight:600;min-height:32px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}td:first-child,th:first-child{text-align:left}
-.raw{font:13px ui-monospace,monospace;color:var(--mut);overflow-wrap:anywhere}
+.raw{white-space:pre-wrap;font:13px ui-monospace,monospace;color:var(--mut);overflow-wrap:anywhere}
 .note{font-size:13px;color:var(--mut)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -81,9 +81,9 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;b
 
   <div class="card">
     <details><summary>Device &amp; debug</summary>
-      <p class="note">Default service/characteristic is 0xaa41 (community-documented). If connecting fails, open a BLE scanner app, find the Perifit's custom service UUID, and paste it here.</p>
+      <p class="note">Default: service 0xAA40, data channel 0xAA41. If connecting fails, open a BLE scanner app, find the Perifit's custom service UUID, and paste it here.</p>
       <div class="grid">
-        <label>Service UUID<input id="uSvc" value="0000aa41-0000-1000-8000-00805f9b34fb"></label>
+        <label>Service UUID<input id="uSvc" value="0000aa40-0000-1000-8000-00805f9b34fb"></label>
         <label>Byte order<select id="uEnd"><option value="be">Big-endian</option><option value="le">Little-endian</option></select></label>
       </div>
       <label style="display:flex;align-items:center;gap:10px;margin-top:10px;color:var(--ink)"><input id="uAll" type="checkbox" style="width:22px;min-height:22px"> Show all Bluetooth devices when connecting</label>
@@ -98,12 +98,12 @@ const $=id=>document.getElementById(id);
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 
 // ---------- state ----------
-let raw=0, smooth=0, connected=false, demo=false, demoDown=false;
+let packets=0, chrName='', raw=0, smooth=0, connected=false, demo=false, demoDown=false;
 let cal=store.get('cal',{rest:0,max:0});
 const trace=[]; // {t,v}
 let game={mode:'idle'};
 const settingsIds=['sHold','sRest','sReps','sWidth','sLo','sCh','uSvc','uEnd'];
-const saved=store.get('settings',{});
+const saved=store.get('settings',{});if(/aa41/.test(saved.uSvc||''))delete saved.uSvc;
 settingsIds.forEach(id=>{if(saved[id]!=null)$(id).value=saved[id];$(id).addEventListener('change',()=>{const o={};settingsIds.forEach(i=>o[i]=$(i).value);store.set('settings',o)})});
 const S=()=>({hold:+$('sHold').value,rest:+$('sRest').value,reps:+$('sReps').value,lo:+$('sLo').value,hi:Math.min(100,+$('sLo').value+ +$('sWidth').value)});
 const norm=v=>cal.max>cal.rest?Math.max(0,Math.min(1.3,(v-cal.rest)/(cal.max-cal.rest))):0;
@@ -113,7 +113,8 @@ function parse(dv){
   const le=$('uEnd').value==='le';
   const b=dv.byteLength>=2?dv.getUint16(0,le):0, t=dv.byteLength>=4?dv.getUint16(2,le):0;
   const bytes=[...new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength)].map(x=>x.toString(16).padStart(2,'0')).join(' ');
-  $('raw').textContent=`raw: ${bytes}  base=${b} tip=${t}`;
+  packets++;
+  $('raw').textContent=`packets: ${packets} · ${chrName}\nraw: ${bytes}  base=${b} tip=${t}`;
   const ch=$('sCh').value; raw=ch==='base'?b:ch==='tip'?t:Math.max(b,t);
 }
 async function connect(){
@@ -123,8 +124,8 @@ async function connect(){
   try{
     let svc=$('uSvc').value.trim().toLowerCase().replace(/^0x/,'');
     if(/^[0-9a-f]{4}$/.test(svc))svc='0000'+svc+'-0000-1000-8000-00805f9b34fb';
-    const short='0000aa41-0000-1000-8000-00805f9b34fb';
-    const svcs=[...new Set([svc,short])];
+    const short='0000aa40-0000-1000-8000-00805f9b34fb', dataUuid='0000aa41-0000-1000-8000-00805f9b34fb';
+    const svcs=[...new Set([svc,short,dataUuid])];
     log('1/5 choosing device');
     const opts=$('uAll').checked?{acceptAllDevices:true,optionalServices:svcs}:{filters:[{namePrefix:'Perifit'},{services:[short]}],optionalServices:svcs};
     const dev=await navigator.bluetooth.requestDevice(opts);
@@ -138,10 +139,14 @@ async function connect(){
     if(!services.length) throw new Error('Connected, but no matching service. Paste the service UUID from a BLE scanner app into Device & debug.');
     log('4/5 finding data channel');
     let chr=null;
-    for(const s of services){
-      let cs=[];try{cs=await s.getCharacteristics()}catch(e){}
-      for(const c of cs){ if(c.properties.notify&&!chr) chr=c; }
+    for(const s of services){ if(!chr){try{chr=await s.getCharacteristic(dataUuid)}catch(e){}} }
+    if(!chr){
+      for(const s of services){
+        let cs=[];try{cs=await s.getCharacteristics()}catch(e){}
+        for(const c of cs){ if(c.properties.notify&&!chr) chr=c; }
+      }
     }
+    chrName='data '+chr?.uuid?.slice(4,8)+' in service '+chr?.service?.uuid?.slice(4,8);
     if(!chr) throw new Error('No notifying characteristic found.');
     chr.addEventListener('characteristicvaluechanged',e=>parse(e.target.value));
     log('5/5 starting data');
@@ -173,7 +178,8 @@ async function calibrate(){
   const m=await sample(4,'Squeeze hard and hold!');
   r.sort((a,b)=>a-b);m.sort((a,b)=>a-b);
   const rest=r[Math.floor(r.length/2)], max=m[Math.floor(m.length*0.9)];
-  if(max-rest<20){setMsg('Didn’t see much change. Check the sensor setting or byte order in Device & debug, then try again.');game={mode:'idle'};refresh();return}
+  if(!packets){setMsg('No data is arriving from the device. Disconnect, close the Perifit app fully, and reconnect.');game={mode:'idle'};refresh();return}
+  if(max-rest<20){setMsg(`Didn’t see much change (relaxed ${Math.round(rest)}, squeeze ${Math.round(max)}). Open Device & debug, squeeze, and check the raw numbers change.`);game={mode:'idle'};refresh();return}
   cal={rest,max};store.set('cal',cal);
   game={mode:'idle'};setMsg('Calibrated. Your zone is set as a % of that max.');refresh();
 }
