@@ -71,8 +71,19 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;b
         <label>Mode<select id="sMode"><option value="above" selected>Strength: stay above line</option><option value="band">Control: stay between lines</option></select></label>
         <label>Target (% of max)<input id="sLo" type="number" min="5" max="95" value="60"></label>
         <label id="wWrap">Band width<select id="sWidth"><option value="15">Narrow</option><option value="25" selected>Medium</option><option value="40">Wide</option></select></label>
-        <label>Sensor<select id="sCh"><option value="max">Max of both</option><option value="base">Base</option><option value="tip">Tip</option></select></label>
+        <label>Sensor<select id="sCh"><option value="base" selected>Base (matches Perifit)</option><option value="max">Max of both</option><option value="tip">Tip</option></select></label>
       </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <details id="gBox"><summary>Grams setup</summary>
+      <p class="note">The Perifit app reports strength in grams: the pressure difference between relaxed and squeezing. To match it: do a strength test in the Perifit app, note the grams, then calibrate here with the same max effort and enter that number.</p>
+      <div class="grid">
+        <label>Perifit app strength (g)<input id="sRef" type="number" min="1" max="2000" placeholder="e.g. 80"></label>
+        <label>Your calibrated max<input id="calShow" disabled></label>
+      </div>
+      <p class="note" id="gNote"></p>
     </details>
   </div>
 
@@ -103,12 +114,23 @@ let packets=0, chrName='', raw=0, smooth=0, connected=false, demo=false, demoDow
 let cal=store.get('cal',{rest:0,max:0});
 const trace=[]; // {t,v}
 let game={mode:'idle'};
-const settingsIds=['sHold','sRest','sReps','sMode','sWidth','sLo','sCh','uSvc','uEnd'];
-const saved=store.get('settings',{});if(/aa41/.test(saved.uSvc||''))delete saved.uSvc;if(saved.sLo==='40'&&!saved.sMode)saved.sLo='60';
+const settingsIds=['sHold','sRest','sReps','sMode','sWidth','sLo','sCh','sRef','uSvc','uEnd'];
+const saved=store.get('settings',{});if(/aa41/.test(saved.uSvc||''))delete saved.uSvc;if(saved.sLo==='40'&&!saved.sMode)saved.sLo='60';if(saved.sCh==='max'&&!('sRef' in saved))delete saved.sCh;
 settingsIds.forEach(id=>{if(saved[id]!=null)$(id).value=saved[id];$(id).addEventListener('change',()=>{const o={};settingsIds.forEach(i=>o[i]=$(i).value);store.set('settings',o)})});
 const S=()=>{const m=$('sMode').value,lo=+$('sLo').value;return{mode:m,hold:+$('sHold').value,rest:+$('sRest').value,reps:+$('sReps').value,lo,hi:m==='above'?999:Math.min(100,lo+ +$('sWidth').value)}};
+if(cal.ch!==$('sCh').value)cal={rest:0,max:0};
+$('sCh').addEventListener('change',()=>{if(cal.ch!==$('sCh').value){cal={rest:0,max:0};syncGrams();refresh();setMsg('Sensor changed. Please calibrate again.')}});
 const syncMode=()=>{$('wWrap').style.display=$('sMode').value==='band'?'':'none'};$('sMode').addEventListener('change',syncMode);syncMode();
 const norm=v=>cal.max>cal.rest?Math.max(0,Math.min(1.3,(v-cal.rest)/(cal.max-cal.rest))):0;
+// grams: the Perifit app reports (contracted - relaxed) pressure in grams. We scale our raw delta so that
+// our calibrated max delta equals the grams the user saw in the Perifit app. Until then, show raw units.
+const gPer=()=>{const ref=+$('sRef').value, d=cal.max-cal.rest;return ref>0&&d>0&&!demo?ref/d:0};
+const fmt=delta=>{const k=gPer();return k?Math.round(Math.max(0,delta)*k)+' g':Math.round(Math.max(0,delta))+' u'};
+function syncGrams(){
+  const d=cal.max-cal.rest; $('calShow').value=d>0?(demo?'demo':Math.round(d)+' raw units'):'not calibrated';
+  $('gNote').textContent=gPer()?`1 raw unit ≈ ${gPer().toFixed(3)} g. Recalibrate whenever you redo the Perifit test.`:'Showing raw units (u) until you enter your Perifit strength.';
+}
+$('sRef').addEventListener('input',()=>{syncGrams();renderHist()});
 
 // ---------- bluetooth ----------
 function parse(dv){
@@ -156,7 +178,7 @@ async function connect(){
     log('5/5 starting data');
     await chr.startNotifications();
     if(dev.name)store.set('devName',dev.name);
-    connected=true; demo=false; cal=store.get('cal',{rest:0,max:0}); raw=0; smooth=0;
+    connected=true; demo=false; cal=store.get('cal',{rest:0,max:0}); if(cal.ch!==$('sCh').value)cal={rest:0,max:0}; raw=0; smooth=0; syncGrams();
     setStatus('Connected: '+(dev.name||'Perifit'));
     setMsg(cal.max>cal.rest?'Connected. Start a set, or recalibrate if it feels off.':'Connected. Calibrate first: relax, then squeeze as hard as you comfortably can.');
   }catch(e){
@@ -170,7 +192,7 @@ async function connect(){
 
 // ---------- demo (touch = squeeze) ----------
 const stage=$('stage');
-const down=e=>{e.preventDefault();demoDown=true;if(!connected&&!demo){demo=true;if(!(cal.max>cal.rest))cal={rest:200,max:1800};setStatus('Demo mode: press = squeeze');refresh()}};
+const down=e=>{e.preventDefault();demoDown=true;if(!connected&&!demo){demo=true;if(!(cal.max>cal.rest))cal={rest:200,max:1800,ch:$('sCh').value};setStatus('Demo mode: press = squeeze');refresh()}};
 const up=()=>demoDown=false;
 stage.addEventListener('pointerdown',down);addEventListener('pointerup',up);addEventListener('pointercancel',up);
 
@@ -186,14 +208,16 @@ async function calibrate(){
   const rest=r[Math.floor(r.length/2)], max=m[Math.floor(m.length*0.9)];
   if(!packets){setMsg('No data is arriving from the device. Disconnect, close the Perifit app fully, and reconnect.');game={mode:'idle'};refresh();return}
   if(max-rest<20){setMsg(`Didn’t see much change (relaxed ${Math.round(rest)}, squeeze ${Math.round(max)}). Open Device & debug, squeeze, and check the raw numbers change.`);game={mode:'idle'};refresh();return}
-  cal={rest,max};store.set('cal',cal);
-  game={mode:'idle'};setMsg('Calibrated. Your zone is set as a % of that max.');refresh();
+  cal={rest,max,ch:$('sCh').value};store.set('cal',cal);
+  const cl=store.get('cals',[]);cl.unshift({d:new Date().toISOString(),delta:max-rest});store.set('cals',cl.slice(0,100));
+  syncGrams();renderHist();
+  game={mode:'idle'};setMsg(`Calibrated. Max strength: ${fmt(max-rest)}. Your target is a % of that.`);refresh();
 }
 
 // ---------- the hold game ----------
 function startSet(){
   const s=S();
-  game={mode:'hold',rep:1,s,phaseEnd:performance.now()+s.hold*1000,inZone:0,total:0,streak:0,best:0,reps:[],lastT:performance.now(),graceT:0,inside:false};
+  game={mode:'hold',rep:1,s,phaseEnd:performance.now()+s.hold*1000,inZone:0,total:0,streak:0,best:0,reps:[],lastT:performance.now(),graceT:0,inside:false,sum:0,peak:0};
   refresh();
 }
 function tickGame(now){
@@ -202,6 +226,7 @@ function tickGame(now){
   const p=norm(smooth)*100, s=game.s;
   if(game.mode==='hold'){
     game.total+=dt;
+    const dRaw=Math.max(0,smooth-cal.rest); game.sum+=dRaw*dt; game.peak=Math.max(game.peak,dRaw);
     const inside=p>=s.lo&&p<=s.hi;
     game.inside=inside;
     if(inside){game.inZone+=dt;game.streak+=dt;game.graceT=0}
@@ -210,14 +235,14 @@ function tickGame(now){
     const left=Math.max(0,(game.phaseEnd-now)/1000);
     setMsg(inside?`Squeeze & hold · ${Math.ceil(left)}s`:p<s.lo?`Squeeze harder! · ${Math.ceil(left)}s`:`A bit lighter · ${Math.ceil(left)}s`);
     if(now>=game.phaseEnd){
-      game.reps.push({pct:Math.round(100*game.inZone/Math.max(game.total,.01)),best:+game.best.toFixed(1)});
+      game.reps.push({pct:Math.round(100*game.inZone/Math.max(game.total,.01)),best:+game.best.toFixed(1),avg:game.sum/Math.max(game.total,.01)});
       if(game.rep>=s.reps){finish();return}
       game.mode='rest';game.phaseEnd=now+s.rest*1000;
     }
   }else{
     const left=Math.ceil((game.phaseEnd-now)/1000);
     setMsg(`Relax completely · ${left}s · next: rep ${game.rep+1} of ${game.s.reps}`);
-    if(now>=game.phaseEnd){game.rep++;game.mode='hold';game.phaseEnd=now+s.hold*1000;game.inZone=0;game.total=0;game.streak=0;game.best=0;game.graceT=0}
+    if(now>=game.phaseEnd){game.rep++;game.mode='hold';game.phaseEnd=now+s.hold*1000;game.inZone=0;game.total=0;game.streak=0;game.best=0;game.graceT=0;game.sum=0}
   }
 }
 function finish(){
@@ -225,22 +250,30 @@ function finish(){
   const avg=Math.round(reps.reduce((a,r)=>a+r.pct,0)/reps.length);
   const best=Math.max(...reps.map(r=>r.best));
   const h=store.get('history',[]);
-  h.unshift({d:new Date().toISOString(),hold:s.hold,reps:s.reps,zone:`${s.lo}–${s.hi}%`,avg,best});
+  const avgRaw=reps.reduce((a,r)=>a+r.avg,0)/reps.length;
+  if(!demo) h.unshift({d:new Date().toISOString(),hold:s.hold,reps:s.reps,zone:`${s.lo}–${s.hi}%`,avg,best,avgRaw,peakRaw:game.peak,maxRaw:cal.max-cal.rest});
   store.set('history',h.slice(0,200));
   let tip='';
   if(avg>=80){
     if(s.mode==='above'&&s.lo<85){$('sLo').value=s.lo+5;$('sLo').dispatchEvent(new Event('change'));tip=` Strong set! Target raised to ${s.lo+5}% for next time.`}
     else{$('sHold').value=s.hold+2;$('sHold').dispatchEvent(new Event('change'));tip=` Strong set! Holds raised to ${s.hold+2}s for next time.`}
   } else if(avg<50) tip=' Try a lower target or shorter holds next time.';
-  setMsg(`Set done: above target ${avg}% of the time, longest unbroken hold ${best}s.${tip}`);
+  setMsg(`Set done: on target ${avg}% of the time, average hold ${fmt(avgRaw)}, peak ${fmt(game.peak)}, longest unbroken hold ${best}s.${tip}`);
   game={mode:'idle'};renderHist();refresh();
 }
 function renderHist(){
-  const h=store.get('history',[]);
-  if(!h.length){$('hist').innerHTML='<p class="note">No sets yet.</p>';return}
+  const h=store.get('history',[]), cl=store.get('cals',[]);
   const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
-  $('hist').innerHTML='<table><thead><tr><th>Date</th><th>Hold</th><th>Reps</th><th>On target</th><th>Longest</th></tr></thead><tbody>'+
-    h.slice(0,30).map(r=>`<tr><td>${esc(new Date(r.d).toLocaleDateString(undefined,{month:'short',day:'numeric'}))}</td><td>${esc(r.hold)}s</td><td>${esc(r.reps)}</td><td>${esc(r.avg)}%</td><td>${esc(r.best)}s</td></tr>`).join('')+'</tbody></table>';
+  const day=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  let out='';
+  if(cl.length){
+    out+=`<p style="margin:0 0 6px"><b>Max strength</b>: ${esc(fmt(cl[0].delta))} on ${esc(day(cl[0].d))}`+
+      (cl.length>1?` (first: ${esc(fmt(cl[cl.length-1].delta))} on ${esc(day(cl[cl.length-1].d))})`:'')+`</p>`;
+  }
+  if(!h.length){$('hist').innerHTML=out+'<p class="note">No sets yet.</p>';return}
+  out+='<div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Hold</th><th>On target</th><th>Avg hold</th><th>Peak</th><th>Best</th></tr></thead><tbody>'+
+    h.slice(0,30).map(r=>`<tr><td>${esc(day(r.d))}</td><td>${esc(r.reps)}×${esc(r.hold)}s</td><td>${esc(r.avg)}%</td><td>${r.avgRaw!=null?esc(fmt(r.avgRaw)):'–'}</td><td>${r.peakRaw!=null?esc(fmt(r.peakRaw)):'–'}</td><td>${esc(r.best)}s</td></tr>`).join('')+'</tbody></table></div>';
+  $('hist').innerHTML=out;
 }
 
 // ---------- drawing ----------
@@ -265,7 +298,7 @@ function draw(){
     cx.beginPath();cx.moveTo(0,yLo);cx.lineTo(right,yLo);cx.stroke();
     if(s.mode==='band'){cx.beginPath();cx.moveTo(0,yHi);cx.lineTo(right,yHi);cx.stroke()}
     cx.setLineDash([]);cx.fillStyle=css('--hot');cx.font='600 12px Inter,sans-serif';cx.textAlign='right';
-    cx.fillText('target '+s.lo+'%',right,yLo+16);cx.textAlign='left';
+    cx.fillText('target '+s.lo+'% · '+fmt((cal.max-cal.rest)*s.lo/100),right,yLo+16);cx.textAlign='left';
   }
   // trace: last 10s scrolling left, newest point at the right edge
   cx.strokeStyle=css('--plum');cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();
@@ -295,8 +328,9 @@ function loop(now){
   smooth+= (raw-smooth)*0.3;
   trace.push({t:now,v:norm(smooth)});while(trace.length&&now-trace[0].t>10000)trace.shift();
   tickGame(now);
-  const p=Math.round(norm(smooth)*100);$('pct').textContent=(cal.max>cal.rest?p:Math.round(smooth))+(cal.max>cal.rest?'%':'');
-  $('sub2').textContent=cal.max>cal.rest?'of your max':'raw (calibrate to see %)';
+  const p=Math.round(norm(smooth)*100);
+  if(cal.max>cal.rest){$('pct').textContent=fmt(smooth-cal.rest);$('sub2').textContent=p+'% of your max'}
+  else{$('pct').textContent=Math.round(smooth);$('sub2').textContent='raw (calibrate to see grams)'}
   draw();requestAnimationFrame(loop);
 }
 
@@ -313,7 +347,7 @@ function refresh(){
 $('bConn').addEventListener('click',connect);
 $('bCal').addEventListener('click',calibrate);
 $('bGo').addEventListener('click',startSet);
-renderHist();refresh();requestAnimationFrame(loop);
+syncGrams();renderHist();refresh();requestAnimationFrame(loop);
 }
 </script>
 </body>
