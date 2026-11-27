@@ -56,9 +56,24 @@ function parse(dv) {
   if (recording) recording.push({ t: tn, b, tip: t });
 }
 let recording = null;
+// iPhone Bluetooth often ignores the first connect, or a stale link from an old tab blocks it.
+// Each try gets 8 s; between tries we drop any half-open link. Up to 3 tries.
+async function gattConnect(dev, log, verb) {
+  if (dev.gatt.connected) return dev.gatt;                     // already linked (e.g. from before a reload)
+  let lastErr;
+  for (let i = 1; i <= 3; i++) {
+    log(`2/5 ${verb} ${dev.name || 'Perifit'}${i > 1 ? ` (try ${i} of 3)` : ''}`);
+    try { return await Promise.race([dev.gatt.connect(), new Promise((_, j) => setTimeout(() => j(new Error('timed out after 8 s')), 8000))]); }
+    catch (e) { lastErr = e; try { dev.gatt.disconnect(); } catch {} await sleep(800); }
+  }
+  throw new Error(`the Perifit didn’t answer (${lastErr?.message || lastErr}). Check its light is blinking, the Perifit app is fully closed (swipe it away), then tap Connect again`);
+}
+let connecting = false;
 async function connect() {
+  if (connecting) return;
   if (!navigator.bluetooth) { msg('This browser has no Bluetooth. Open this page in Bluefy on iPhone, or Chrome on Android/desktop. You can still try demo mode: press and hold the graph.'); return; }
   let step = 'start'; const log = t => { step = t; $('raw').textContent = 'step: ' + t; status(t); };
+  connecting = true; refresh();
   try {
     let svc = $('uSvc').value.trim().toLowerCase().replace(/^0x/, ''); if (/^[0-9a-f]{4}$/.test(svc)) svc = '0000' + svc + '-0000-1000-8000-00805f9b34fb';
     const short = '0000aa40-0000-1000-8000-00805f9b34fb', dataUuid = '0000aa41-0000-1000-8000-00805f9b34fb', svcs = [...new Set([svc, short, dataUuid])];
@@ -71,15 +86,14 @@ async function connect() {
     }
     if (lastDev) {
       log('2/5 reconnecting to ' + (lastDev.name || 'Perifit'));
-      try { gatt = await Promise.race([lastDev.gatt.connect(), new Promise((_, j) => setTimeout(() => j(new Error('timeout')), 6000))]); dev = lastDev; }
-      catch { lastDev = null; status('Not connected'); msg('Couldn’t reach your Perifit. Check it’s on (light blinking), then tap Connect again to pick it.'); refresh(); return; }
+      try { gatt = await gattConnect(lastDev, log, 'reconnecting to'); dev = lastDev; }
+      catch { lastDev = null; log('1/5 choosing device'); }   // fall through to the picker instead of giving up
     }
     if (!gatt) {
       log('1/5 choosing device');
       msg(known ? `Pick “${known}” from the list.` : 'Pick your Perifit from the list.');
       dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: svcs });
-      log('2/5 connecting to ' + (dev.name || 'device'));
-      gatt = await dev.gatt.connect();
+      gatt = await gattConnect(dev, log, 'connecting to');
     }
     lastDev = dev;
     if (!dev._lpListen) { dev._lpListen = true; dev.addEventListener('gattserverdisconnected', () => { connected = false; status('Disconnected. Tap Connect to reconnect.'); if (game && !game.done) abort('The Perifit disconnected. That set wasn’t saved.'); refresh(); }); }
@@ -103,6 +117,7 @@ async function connect() {
     if (step.startsWith('1/5') && /cancel|NotFound/i.test(why)) { status('Not connected'); msg('No device chosen. Make sure the Perifit is on (light blinking) and the Perifit app is closed, then tap Connect.'); }
     else { status('Not connected (failed at ' + step + ')'); msg('Could not connect at step ' + step + ': ' + why); }
   }
+  connecting = false;
   refresh();
 }
 
@@ -293,7 +308,7 @@ function refresh() {
   if ($('plan')) renderPlan();
   const live = connected || demo;
   $('dot').classList.toggle('on', live);
-  $('bConn').disabled = connected || busy; $('bCal').disabled = !live || busy;
+  $('bConn').disabled = connected || busy || connecting; $('bConn').textContent = connecting ? 'Connecting…' : 'Connect'; $('bCal').disabled = !live || busy;
   for (const b of document.querySelectorAll('[data-game]')) b.disabled = !live || busy || !hasCal();
   for (const b of document.querySelectorAll('[data-setup]')) b.disabled = !live || busy || !hasCal();
   const guard = M.guardUsable({ rS: cal.rS, rB: cal.rB });
