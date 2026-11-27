@@ -5,383 +5,85 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Leak Proof</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-/* VOICE calm, private, encouraging coach
-   IDEA a tide gauge: your squeeze is water rising into a marked band
-   PICTURE large live meter + 10s trace, band shaded, ring timer
-   COLOUR deep plum ground at night / soft white by day, coral accent for "in zone"
-   TYPE Fraunces numerals, Inter body; LAYOUT one column, meter first */
-:root{color-scheme:light dark;--bg:light-dark(#fbf8f6,#1a1220);--card:light-dark(#fff,#241a2c);--ink:light-dark(#22172a,#f3ecf6);--mut:light-dark(#76687f,#a898b3);--line:light-dark(#e8dfe9,#3a2c44);--plum:#6b3a7a;--zone:light-dark(#ffd9cc,#5a2f3a);--hot:#ff6a4d;--ok:#2f9e7a}
-:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
-*{box-sizing:border-box;min-width:0}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-main{max-width:560px;margin:0 auto;padding:16px}
-h1{font:700 28px/1.1 Fraunces,serif;margin:4px 0 2px}
-.sub{color:var(--mut);font-size:14px;margin:0 0 14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
-.stage{position:relative;height:min(52vh,420px)}
-canvas{position:absolute;inset:0;width:100%;height:100%}
-.big{position:absolute;top:10px;left:14px;pointer-events:none}
-.big b{font:700 52px/1 Fraunces,serif;display:block}
-.big span{color:var(--mut);font-size:14px}
-.msg{font:500 20px/1.25 Fraunces,serif;text-align:center;margin:6px 0 10px;min-height:50px}
-.row{display:flex;gap:8px;flex-wrap:wrap}
-button{font:600 16px Inter,sans-serif;min-height:48px;padding:0 18px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);flex:1}
-button.pri{background:var(--plum);color:#fff;border-color:var(--plum)}
-button:disabled{opacity:.45}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
-.status{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mut);margin-bottom:10px}
-.dot{width:10px;height:10px;border-radius:50%;background:#aaa}.dot.on{background:var(--ok)}
-label{display:grid;gap:4px;font-size:14px;color:var(--mut)}
-input,select{font:16px Inter,sans-serif;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 10px;width:100%}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-details summary{cursor:pointer;font-weight:600;min-height:32px}
-table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}td:first-child,th:first-child{text-align:left}
-.raw{white-space:pre-wrap;font:13px ui-monospace,monospace;color:var(--mut);overflow-wrap:anywhere}
-.note{font-size:13px;color:var(--mut)}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%236b3a7a%22/%3E%3C/svg%3E">
 </head>
 <body>
 <main>
   <h1>Leak Proof</h1>
-  <p class="sub">Sustained-contraction practice for Perifit</p>
-
+  <p class="sub">Pelvic floor games for Perifit · <a href="preview.html">How the games work</a></p>
   <div class="status"><span class="dot" id="dot"></span><span id="stxt">Not connected</span></div>
 
-  <div class="card">
-    <div class="stage" id="stage"><canvas id="cv"></canvas>
-      <div class="big"><b id="pct">0%</b><span id="sub2">of your max</span></div>
+  <div class="card" id="stageCard">
+    <h2 id="gTitle" hidden></h2>
+    <div class="stage" id="stage"><canvas id="cv"></canvas><div class="big"><b id="pct">—</b><span>of your max</span></div></div>
+    <div class="msg" id="msg" aria-live="polite">Connect your Perifit, or press and hold the graph to try demo mode.</div>
+    <p class="tip" id="tip" hidden></p>
+    <div id="homeFlag"></div>
+    <div class="row"><button id="bStop" hidden>Stop</button></div>
+  </div>
+
+  <section id="v-result" hidden>
+    <div class="card" id="result"></div>
+    <div class="row" style="margin-bottom:12px"><button class="pri" id="bNext" hidden>Next</button><button id="bBack">Back to games</button></div>
+  </section>
+
+  <section id="v-symptoms" hidden>
+    <div class="card"><h2>How have things been?</h2><p class="note">Takes 30 seconds. Symptoms are the real measure of progress. Pressure numbers are only a guide.</p><form id="symForm"></form></div>
+  </section>
+
+  <section id="v-home">
+    <div class="card" id="plan"></div>
+    <div class="card">
+      <div class="row">
+        <button class="pri" id="bConn">Connect</button>
+        <button id="bCal" disabled>Calibrate</button>
+      </div>
+      <div class="grid" style="margin-top:10px">
+        <label>Position<select id="pos"><option value="standing">Standing</option><option value="sitting">Sitting</option><option value="lying">Lying down</option></select></label>
+        <label id="stanceWrap">Standing level<select id="stance"></select></label>
+      </div>
+      <p class="note" id="calState" style="margin-top:8px"></p>
     </div>
-    <div class="msg" id="msg">Connect your Perifit, or try demo mode (press and hold the meter).</div>
-    <div class="row">
-      <button class="pri" id="bConn">Connect</button>
-      <button id="bCal" disabled>Calibrate</button>
-      <button class="pri" id="bGo" disabled>Start set</button>
+
+    <div class="card"><h2>Games</h2>
+      <p class="focus"><b>Your focus: endurance.</b> Easiest: just press <b>Start set</b> above, up to 3× a day. Your quick squeeze is strong; what fades is a long hold, especially while your body works. Core routine: <b>Hold the Line</b> (Daily set, then Long hold) and <b>Squeeze &amp; Move</b> (bridge + single-leg march), most days. Add Cough Shield and a few Quick Flicks to keep the speed you already have.</p>
+      <div id="games"></div></div>
+
+    <div class="card"><h2>Progress</h2><div id="progress"></div>
+      <div class="row" style="margin-top:10px"><button id="bSym">Log symptoms</button></div></div>
+
+    <div class="card">
+      <details><summary>Setup &amp; extras</summary>
+        <p class="note"><b>Form check</b> learns what bearing down looks like on your two sensors, then flags reps that push down instead of lifting up. <b>Cough recording</b> tunes Cough Shield to your cough.</p>
+        <div class="row"><button id="bForm" data-setup>Form check</button><button id="bCough" data-setup>Record coughs</button></div>
+        <div class="grid" style="margin-top:10px">
+          <label class="chk"><input type="checkbox" id="sSound"> Beeps</label>
+          <label class="chk"><input type="checkbox" id="sVoice"> Voice cues</label>
+          <label class="chk"><input type="checkbox" id="sTips"> Form reminders</label>
+          <label class="chk"><input type="checkbox" id="sTipVoice"> Speak form reminders</label>
+          <label>Sensor<select id="sCh"><option value="base">Base (matches Perifit)</option><option value="max">Max of both</option><option value="tip">Tip</option></select></label>
+          <label>Perifit app strength (g)<input id="sRef" type="number" min="1" max="2000" placeholder="optional, e.g. 80"></label>
+        </div>
+        <h3>Backup</h3>
+        <p class="note">Your data lives only in this browser. Export a backup now and then.</p>
+        <div class="row"><button id="bExport">Export data</button><label style="flex:1"><span class="note">Import a backup</span><input type="file" id="fImport" accept="application/json"></label></div>
+      </details>
     </div>
-  </div>
 
-  <div class="card">
-    <details open><summary>Set settings</summary>
-      <div class="grid" style="margin-top:8px">
-        <label>Hold (sec)<input id="sHold" type="number" min="2" max="120" value="10"></label>
-        <label>Rest (sec)<input id="sRest" type="number" min="2" max="120" value="10"></label>
-        <label>Reps<input id="sReps" type="number" min="1" max="30" value="6"></label>
-        <label>Mode<select id="sMode"><option value="above" selected>Strength: stay above line</option><option value="band">Control: stay between lines</option></select></label>
-        <label>Target (% of max)<input id="sLo" type="number" min="5" max="95" value="60"></label>
-        <label id="wWrap">Band width<select id="sWidth"><option value="15">Narrow</option><option value="25" selected>Medium</option><option value="40">Wide</option></select></label>
-        <label>Sensor<select id="sCh"><option value="base" selected>Base (matches Perifit)</option><option value="max">Max of both</option><option value="tip">Tip</option></select></label>
-      </div>
-    </details>
-  </div>
-
-  <div class="card">
-    <details id="gBox"><summary>Grams setup</summary>
-      <p class="note">The Perifit app reports strength in grams: the pressure difference between relaxed and squeezing. To match it: do a strength test in the Perifit app, note the grams, then calibrate here with the same max effort and enter that number.</p>
-      <div class="grid">
-        <label>Perifit app strength (g)<input id="sRef" type="number" min="1" max="2000" placeholder="e.g. 80"></label>
-        <label>Your calibrated max<input id="calShow" disabled></label>
-      </div>
-      <p class="note" id="gNote"></p>
-    </details>
-  </div>
-
-  <div class="card">
-    <details><summary>History</summary><div id="hist" style="margin-top:8px"></div></details>
-  </div>
-
-  <div class="card">
-    <details><summary>Device &amp; debug</summary>
-      <p class="note">Default: service 0xAA40, data channel 0xAA41. If connecting fails, open a BLE scanner app, find the Perifit's custom service UUID, and paste it here.</p>
-      <div class="grid">
-        <label>Service UUID<input id="uSvc" value="0000aa40-0000-1000-8000-00805f9b34fb"></label>
-        <label>Byte order<select id="uEnd"><option value="be">Big-endian</option><option value="le">Little-endian</option></select></label>
-      </div>
-      <p class="raw" id="raw">raw: —</p>
-    </details>
-  </div>
-  <p class="note">Runs in the Bluefy browser on iPhone (Safari has no Bluetooth). Close the Perifit app first: the device talks to one app at a time.</p>
+    <div class="card">
+      <details><summary>Device &amp; debug</summary>
+        <div class="grid">
+          <label>Service UUID<input id="uSvc" value="0000aa40-0000-1000-8000-00805f9b34fb"></label>
+          <label>Byte order<select id="uEnd"><option value="be">Big-endian</option><option value="le">Little-endian</option></select></label>
+        </div>
+        <p class="raw" id="raw">raw: —</p>
+      </details>
+    </div>
+    <p class="note">Runs in Bluefy on iPhone (Safari has no Bluetooth). Close the Perifit app first. Not medical advice: stop if anything hurts, and see a pelvic floor physical therapist for heaviness, pain or leaking that isn’t improving.</p>
+  </section>
 </main>
-<script>
-{
-const $=id=>document.getElementById(id);
-const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
-
-// ---------- state ----------
-let lastDev=null, pktTimes=[], calInfo=null, packets=0, chrName='', raw=0, smooth=0, connected=false, demo=false, demoDown=false;
-let cal=store.get('cal',{rest:0,max:0});
-const trace=[]; // {t,v}
-let game={mode:'idle'};
-const settingsIds=['sHold','sRest','sReps','sMode','sWidth','sLo','sCh','sRef','uSvc','uEnd'];
-const saved=store.get('settings',{});if(/aa41/.test(saved.uSvc||''))delete saved.uSvc;if(saved.sLo==='40'&&!saved.sMode)saved.sLo='60';if(saved.sCh==='max'&&!('sRef' in saved))delete saved.sCh;
-settingsIds.forEach(id=>{if(saved[id]!=null)$(id).value=saved[id];$(id).addEventListener('change',()=>{const o={};settingsIds.forEach(i=>o[i]=$(i).value);store.set('settings',o)})});
-const S=()=>{const m=$('sMode').value,lo=+$('sLo').value;return{mode:m,hold:+$('sHold').value,rest:+$('sRest').value,reps:+$('sReps').value,lo,hi:m==='above'?999:Math.min(100,lo+ +$('sWidth').value)}};
-if(cal.ch!==$('sCh').value)cal={rest:0,max:0};
-$('sCh').addEventListener('change',()=>{if(cal.ch!==$('sCh').value){cal={rest:0,max:0};syncGrams();refresh();setMsg('Sensor changed. Please calibrate again.')}});
-const syncMode=()=>{$('wWrap').style.display=$('sMode').value==='band'?'':'none'};$('sMode').addEventListener('change',syncMode);syncMode();
-const norm=v=>cal.max>cal.rest?Math.max(0,Math.min(1.3,(v-cal.rest)/(cal.max-cal.rest))):0;
-// grams: the Perifit app reports (contracted - relaxed) pressure in grams. We scale our raw delta so that
-// our calibrated max delta equals the grams the user saw in the Perifit app. Until then, show raw units.
-const gPer=()=>{const ref=+$('sRef').value, d=cal.max-cal.rest;return ref>0&&d>0&&!demo?ref/d:0};
-const calFmt=d=>{const k=calInfo&&calInfo.k;return k?Math.round(Math.max(0,d)*k)+' g':Math.round(Math.max(0,d))+' u'};
-const fmt=delta=>{const k=gPer();return k?Math.round(Math.max(0,delta)*k)+' g':Math.round(Math.max(0,delta))+' u'};
-function syncGrams(){
-  const d=cal.max-cal.rest; $('calShow').value=d>0?(demo?'demo':Math.round(d)+' raw units'):'not calibrated';
-  $('gNote').textContent=gPer()?`1 raw unit ≈ ${gPer().toFixed(3)} g. Recalibrate whenever you redo the Perifit test.`:'Showing raw units (u) until you enter your Perifit strength.';
-}
-$('sRef').addEventListener('input',()=>{syncGrams();renderHist()});
-
-// ---------- bluetooth ----------
-function parse(dv){
-  const le=$('uEnd').value==='le';
-  const b=dv.byteLength>=2?dv.getUint16(0,le):0, t=dv.byteLength>=4?dv.getUint16(2,le):0;
-  const bytes=[...new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength)].map(x=>x.toString(16).padStart(2,'0')).join(' ');
-  packets++; const tn=performance.now(); pktTimes.push(tn); while(pktTimes.length&&tn-pktTimes[0]>2000)pktTimes.shift();
-  $('raw').textContent=`packets: ${packets} (${(pktTimes.length/2).toFixed(0)}/sec) · ${chrName}\nraw: ${bytes}  base=${b} tip=${t}`;
-  const ch=$('sCh').value; raw=ch==='base'?b:ch==='tip'?t:Math.max(b,t);
-}
-async function connect(){
-  if(!navigator.bluetooth){setMsg('This browser has no Bluetooth. Open this page in Bluefy on iPhone, or Chrome on Android/desktop.');return}
-  let step='start';
-  const log=t=>{step=t;$('raw').textContent='step: '+t;setStatus(t)};
-  try{
-    let svc=$('uSvc').value.trim().toLowerCase().replace(/^0x/,'');
-    if(/^[0-9a-f]{4}$/.test(svc))svc='0000'+svc+'-0000-1000-8000-00805f9b34fb';
-    const short='0000aa40-0000-1000-8000-00805f9b34fb', dataUuid='0000aa41-0000-1000-8000-00805f9b34fb';
-    const svcs=[...new Set([svc,short,dataUuid])];
-    // Bluefy's name/service filters don't match the Perifit, so never filter.
-    // Instead, reuse a device we already have permission for, so no picker is needed.
-    let dev=null, gatt=null;
-    const known=store.get('devName','');
-    if(!lastDev&&navigator.bluetooth.getDevices){
-      try{const list=await navigator.bluetooth.getDevices();lastDev=list.find(d=>d.id===store.get('devId',''))||list.find(d=>known&&d.name===known)||null}catch(e){}
-    }
-    if(lastDev){
-      log('2/5 reconnecting to '+(lastDev.name||'Perifit'));
-      try{gatt=await Promise.race([lastDev.gatt.connect(),new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),6000))]);dev=lastDev}
-      catch(e){lastDev=null;setStatus('Not connected');setMsg('Couldn’t reach your Perifit. Check it’s on (light blinking), then tap Connect again to pick it.');refresh();return}
-    }
-    if(!gatt){
-      log('1/5 choosing device');
-      setMsg(known?`Pick “${known}” from the list.`:'Pick your Perifit from the list.');
-      dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:svcs});
-      log('2/5 connecting to '+(dev.name||'device'));
-      gatt=await dev.gatt.connect();
-    }
-    lastDev=dev;
-    if(!dev._lpListen){dev._lpListen=true;dev.addEventListener('gattserverdisconnected',()=>{connected=false;setStatus('Disconnected. Tap Connect to reconnect.');refresh()})}
-    log('3/5 finding service');
-    let services=[];
-    for(const u of svcs){try{services.push(await gatt.getPrimaryService(u))}catch(e){}}
-    if(!services.length){try{services=await gatt.getPrimaryServices()}catch(e){}}
-    if(!services.length) throw new Error('Connected, but no matching service. Paste the service UUID from a BLE scanner app into Device & debug.');
-    log('4/5 finding data channel');
-    let chr=null;
-    for(const s of services){ if(!chr){try{chr=await s.getCharacteristic(dataUuid)}catch(e){}} }
-    if(!chr){
-      for(const s of services){
-        let cs=[];try{cs=await s.getCharacteristics()}catch(e){}
-        for(const c of cs){ if(c.properties.notify&&!chr) chr=c; }
-      }
-    }
-    chrName='data '+chr?.uuid?.slice(4,8)+' in service '+chr?.service?.uuid?.slice(4,8);
-    if(!chr) throw new Error('No notifying characteristic found.');
-    if(!chr._lpListen){chr._lpListen=true;chr.addEventListener('characteristicvaluechanged',e=>parse(e.target.value))}
-    log('5/5 starting data');
-    await chr.startNotifications();
-    if(dev.name)store.set('devName',dev.name);
-    if(dev.id)store.set('devId',dev.id);
-    connected=true; demo=false; cal=store.get('cal',{rest:0,max:0}); if(cal.ch!==$('sCh').value)cal={rest:0,max:0}; raw=0; smooth=0; syncGrams();
-    setStatus('Connected: '+(dev.name||'Perifit'));
-    setMsg(cal.max>cal.rest?'Connected. Start a set, or recalibrate if it feels off.':'Connected. Calibrate first: relax, then squeeze as hard as you comfortably can.');
-  }catch(e){
-    const why=(e&&(e.message||e.name))||String(e);
-    if(step.startsWith('1/5')&&/cancel|NotFound/i.test(why)){setStatus('Not connected');setMsg('No device chosen. Make sure the Perifit is on (light blinking) and the Perifit app is closed, then tap Connect.');refresh();return}
-    setStatus('Not connected (failed at '+step+')');
-    setMsg('Could not connect at step '+step+': '+why);
-  }
-  refresh();
-}
-
-// ---------- demo (touch = squeeze) ----------
-const stage=$('stage');
-const down=e=>{e.preventDefault();demoDown=true;if(!connected&&!demo){demo=true;if(!(cal.max>cal.rest))cal={rest:200,max:1800,ch:$('sCh').value};setStatus('Demo mode: press = squeeze');refresh()}};
-const up=()=>demoDown=false;
-stage.addEventListener('pointerdown',down);addEventListener('pointerup',up);addEventListener('pointercancel',up);
-
-// ---------- calibration ----------
-async function calibrate(){
-  game={mode:'cal'};refresh();
-  // keep the previous grams factor (if any) so we can show approximate grams while calibrating
-  const prevK=gPer(); calInfo={rest:null,peak:0,k:prevK};
-  const sample=async(sec,text,squeeze)=>{const vals=[];const end=performance.now()+sec*1000;
-    while(performance.now()<end){
-      if(squeeze){calInfo.peak=Math.max(calInfo.peak,smooth-calInfo.rest);setMsg(`${text} ${Math.ceil((end-performance.now())/1000)} · best ${calFmt(calInfo.peak)}`)}
-      else setMsg(`${text} ${Math.ceil((end-performance.now())/1000)}`);
-      vals.push(smooth);await new Promise(r=>setTimeout(r,50))}return vals};
-  const r=await sample(4,'Relax completely…');
-  calInfo.rest=[...r].sort((a,b)=>a-b)[Math.floor(r.length/2)];
-  await new Promise(r=>{setMsg('Get ready to squeeze…');setTimeout(r,1500)});
-  const m=await sample(5,'Squeeze hard and hold!',true);
-  calInfo=null;
-  r.sort((a,b)=>a-b);m.sort((a,b)=>a-b);
-  const rest=r[Math.floor(r.length/2)], max=m[Math.floor(m.length*0.9)];
-  if(!packets&&!demo){calInfo=null;setMsg('No data is arriving from the device. Disconnect, close the Perifit app fully, and reconnect.');game={mode:'idle'};refresh();return}
-  if(max-rest<20){setMsg(`Didn’t see much change (relaxed ${Math.round(rest)}, squeeze ${Math.round(max)}). Open Device & debug, squeeze, and check the raw numbers change.`);game={mode:'idle'};refresh();return}
-  cal={rest,max,ch:$('sCh').value};
-  if(!demo){store.set('cal',cal);const cl=store.get('cals',[]);cl.unshift({d:new Date().toISOString(),delta:max-rest});store.set('cals',cl.slice(0,100))}
-  syncGrams();renderHist();
-  game={mode:'idle'};setMsg(`Calibrated. Max strength: ${fmt(max-rest)}. Your target is a % of that.`);refresh();
-}
-
-// ---------- the hold game ----------
-function startSet(){
-  const s=S();
-  game={mode:'hold',rep:1,s,phaseEnd:performance.now()+s.hold*1000,inZone:0,total:0,streak:0,best:0,reps:[],lastT:performance.now(),graceT:0,inside:false,sum:0,peak:0};
-  refresh();
-}
-function tickGame(now){
-  if(game.mode!=='hold'&&game.mode!=='rest')return;
-  const dt=(now-game.lastT)/1000; game.lastT=now;
-  const p=norm(smooth)*100, s=game.s;
-  if(game.mode==='hold'){
-    game.total+=dt;
-    const dRaw=Math.max(0,smooth-cal.rest); game.sum+=dRaw*dt; game.peak=Math.max(game.peak,dRaw);
-    const inside=p>=s.lo&&p<=s.hi;
-    game.inside=inside;
-    if(inside){game.inZone+=dt;game.streak+=dt;game.graceT=0}
-    else{game.graceT+=dt;if(game.graceT>0.4)game.streak=0}
-    game.best=Math.max(game.best,game.streak);
-    const left=Math.max(0,(game.phaseEnd-now)/1000);
-    setMsg(inside?`Squeeze & hold · ${Math.ceil(left)}s`:p<s.lo?`Squeeze harder! · ${Math.ceil(left)}s`:`A bit lighter · ${Math.ceil(left)}s`);
-    if(now>=game.phaseEnd){
-      game.reps.push({pct:Math.round(100*game.inZone/Math.max(game.total,.01)),best:+game.best.toFixed(1),avg:game.sum/Math.max(game.total,.01)});
-      if(game.rep>=s.reps){finish();return}
-      game.mode='rest';game.phaseEnd=now+s.rest*1000;
-    }
-  }else{
-    const left=Math.ceil((game.phaseEnd-now)/1000);
-    setMsg(`Relax completely · ${left}s · next: rep ${game.rep+1} of ${game.s.reps}`);
-    if(now>=game.phaseEnd){game.rep++;game.mode='hold';game.phaseEnd=now+s.hold*1000;game.inZone=0;game.total=0;game.streak=0;game.best=0;game.graceT=0;game.sum=0}
-  }
-}
-function finish(){
-  const s=game.s, reps=game.reps;
-  const avg=Math.round(reps.reduce((a,r)=>a+r.pct,0)/reps.length);
-  const best=Math.max(...reps.map(r=>r.best));
-  const h=store.get('history',[]);
-  const avgRaw=reps.reduce((a,r)=>a+r.avg,0)/reps.length;
-  if(!demo) h.unshift({d:new Date().toISOString(),hold:s.hold,reps:s.reps,zone:`${s.lo}–${s.hi}%`,avg,best,avgRaw,peakRaw:game.peak,maxRaw:cal.max-cal.rest});
-  store.set('history',h.slice(0,200));
-  let tip='';
-  if(avg>=80){
-    if(s.mode==='above'&&s.lo<85){$('sLo').value=s.lo+5;$('sLo').dispatchEvent(new Event('change'));tip=` Strong set! Target raised to ${s.lo+5}% for next time.`}
-    else{$('sHold').value=s.hold+2;$('sHold').dispatchEvent(new Event('change'));tip=` Strong set! Holds raised to ${s.hold+2}s for next time.`}
-  } else if(avg<50) tip=' Try a lower target or shorter holds next time.';
-  setMsg(`Set done: on target ${avg}% of the time, average hold ${fmt(avgRaw)}, peak ${fmt(game.peak)}, longest unbroken hold ${best}s.${tip}`);
-  game={mode:'idle'};renderHist();refresh();
-}
-function renderHist(){
-  const h=store.get('history',[]), cl=store.get('cals',[]);
-  const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
-  const day=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric'});
-  let out='';
-  if(cl.length){
-    out+=`<p style="margin:0 0 6px"><b>Max strength</b>: ${esc(fmt(cl[0].delta))} on ${esc(day(cl[0].d))}`+
-      (cl.length>1?` (first: ${esc(fmt(cl[cl.length-1].delta))} on ${esc(day(cl[cl.length-1].d))})`:'')+`</p>`;
-  }
-  if(!h.length){$('hist').innerHTML=out+'<p class="note">No sets yet.</p>';return}
-  out+='<div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Hold</th><th>On target</th><th>Avg hold</th><th>Peak</th><th>Best</th></tr></thead><tbody>'+
-    h.slice(0,30).map(r=>`<tr><td>${esc(day(r.d))}</td><td>${esc(r.reps)}×${esc(r.hold)}s</td><td>${esc(r.avg)}%</td><td>${r.avgRaw!=null?esc(fmt(r.avgRaw)):'–'}</td><td>${r.peakRaw!=null?esc(fmt(r.peakRaw)):'–'}</td><td>${esc(r.best)}s</td></tr>`).join('')+'</tbody></table></div>';
-  $('hist').innerHTML=out;
-}
-
-// ---------- drawing ----------
-const cv=$('cv'),cx=cv.getContext('2d');
-const probe=document.createElement('i');probe.style.display='none';document.body.appendChild(probe);
-const cc={};function css(v){if(!cc[v]){probe.style.color=`var(${v})`;cc[v]=getComputedStyle(probe).color}return cc[v]}
-matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{for(const k in cc)delete cc[k]});
-function viewRange(){
-  if(game.mode!=='cal'&&cal.max>cal.rest) return [cal.rest,cal.max];
-  let lo=Infinity,hi=-Infinity;for(const p of trace){lo=Math.min(lo,p.v);hi=Math.max(hi,p.v)}
-  if(calInfo&&calInfo.rest!=null)lo=calInfo.rest;
-  if(!isFinite(lo))return[0,100];
-  return [lo,Math.max(hi,lo+100)];
-}
-function draw(){
-  const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
-  if(cv.width!==W*dpr){cv.width=W*dpr;cv.height=H*dpr}
-  cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);
-  const top=84,bot=H-14,right=W-18,y=p=>bot-(bot-top)*Math.min(p,1.2)/1.2;
-  const s=S(), hasCal=cal.max>cal.rest, now=performance.now();
-  // gridlines
-  cx.strokeStyle=css('--line');cx.lineWidth=1;cx.fillStyle=css('--mut');cx.font='12px Inter,sans-serif';
-  [.25,.5,.75,1].forEach(g=>{cx.beginPath();cx.moveTo(0,y(g));cx.lineTo(right,y(g));cx.stroke();cx.fillText(g*100+'%',4,y(g)-4)});
-  // target area + line
-  if(hasCal&&game.mode!=='cal'){
-    const yLo=y(s.lo/100), yHi=s.mode==='above'?top:y(s.hi/100);
-    cx.fillStyle=css('--zone');cx.fillRect(0,yHi,right,yLo-yHi);
-    cx.strokeStyle=css('--hot');cx.lineWidth=2;cx.setLineDash([6,5]);
-    cx.beginPath();cx.moveTo(0,yLo);cx.lineTo(right,yLo);cx.stroke();
-    if(s.mode==='band'){cx.beginPath();cx.moveTo(0,yHi);cx.lineTo(right,yHi);cx.stroke()}
-    cx.setLineDash([]);cx.fillStyle=css('--hot');cx.font='600 12px Inter,sans-serif';cx.textAlign='right';
-    cx.fillText('target '+s.lo+'% · '+fmt((cal.max-cal.rest)*s.lo/100),right,yLo+16);cx.textAlign='left';
-  }
-  // trace: last 10s scrolling left, newest point at the right edge
-  cx.strokeStyle=css('--plum');cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();
-  const [vlo,vhi]=viewRange(), vn=v=>Math.max(0,Math.min(1.3,(v-vlo)/(vhi-vlo)));
-  trace.forEach((pt,i)=>{const x=right*(1-(now-pt.t)/10000);const yy=y(vn(pt.v));i?cx.lineTo(x,yy):cx.moveTo(x,yy)});cx.stroke();
-  // current value dot
-  const on=game.mode==='hold'&&game.inside;
-  cx.fillStyle=on?css('--hot'):css('--plum');cx.beginPath();cx.arc(right,y(vn(smooth)),9,0,7);cx.fill();
-  // ring timer
-  if(game.mode==='hold'||game.mode==='rest'){
-    const dur=(game.mode==='hold'?game.s.hold:game.s.rest)*1000, frac=1-Math.max(0,game.phaseEnd-now)/dur;
-    const rx=W-40,ry=38,rr=24;
-    cx.lineWidth=6;cx.strokeStyle=css('--line');cx.beginPath();cx.arc(rx,ry,rr,0,7);cx.stroke();
-    cx.strokeStyle=game.mode==='hold'?css('--hot'):css('--ok');cx.beginPath();cx.arc(rx,ry,rr,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);cx.stroke();
-    cx.fillStyle=css('--ink');cx.font='600 13px Inter,sans-serif';cx.textAlign='center';cx.fillText(`${game.rep}/${game.s.reps}`,rx,ry+5);cx.textAlign='left';
-  }
-}
-function roundRect(x,y,w,h,r){r=Math.min(r,h/2,w/2);cx.beginPath();cx.moveTo(x+r,y);cx.arcTo(x+w,y,x+w,y+h,r);cx.arcTo(x+w,y+h,x,y+h,r);cx.arcTo(x,y+h,x,y,r);cx.arcTo(x,y,x+w,y,r);cx.closePath()}
-
-// ---------- loop ----------
-let lastDemo=performance.now();
-function loop(now){
-  if(demo&&!connected){ // fake sensor: rises while pressed, falls when released
-    const dt=(now-lastDemo)/1000;raw+= (demoDown?(1800-raw)*2.2:(200-raw)*3)*dt;
-    if(cal.max<=cal.rest){cal={rest:200,max:1800}}
-  }
-  lastDemo=now;
-  smooth+= (raw-smooth)*0.6;
-  trace.push({t:now,v:smooth});while(trace.length&&now-trace[0].t>10000)trace.shift();
-  tickGame(now);
-  const p=Math.round(norm(smooth)*100);
-  if(game.mode==='cal'){
-    if(calInfo&&calInfo.rest!=null){$('pct').textContent=calFmt(smooth-calInfo.rest);$('sub2').textContent='above relaxed'+(calInfo.k?' (approx.)':'')}
-    else{$('pct').textContent='…';$('sub2').textContent='measuring relaxed level'}
-  }
-  else if(cal.max>cal.rest){$('pct').textContent=fmt(smooth-cal.rest);$('sub2').textContent=p+'% of your max'}
-  else{$('pct').textContent=Math.round(smooth);$('sub2').textContent='raw (calibrate to see grams)'}
-  draw();requestAnimationFrame(loop);
-}
-
-function setMsg(t){$('msg').textContent=t}
-function setStatus(t){$('stxt').textContent=t}
-function refresh(){
-  const live=connected||demo, busy=game.mode!=='idle';
-  $('dot').classList.toggle('on',live);
-  $('bConn').disabled=connected||busy;
-  $('bCal').disabled=!live||busy;
-  $('bGo').disabled=!live||busy||!(cal.max>cal.rest);
-  $('bGo').textContent=busy&&game.mode!=='cal'?'Running…':'Start set';
-}
-$('bConn').addEventListener('click',connect);
-$('bCal').addEventListener('click',calibrate);
-$('bGo').addEventListener('click',startSet);
-syncGrams();renderHist();refresh();requestAnimationFrame(loop);
-}
-</script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>
