@@ -14,7 +14,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // ------------------------------------------------------------ state
 let lastDev = null, connected = false, demo = false, demoDown = false, packets = 0, pktTimes = [], chrName = '';
 let rawB = 0, rawT = 0, sB = 0, sT = 0;              // raw + smoothed per sensor
-let game = null, gameMeta = null, busy = false, hiddenAt = 0;
+let rawBuf = [], game = null, gameMeta = null, busy = false, hiddenAt = 0;
 const pref = store.get('pref', { pos: 'standing', stance: 'still', sound: true, voice: true, ch: 'base', end: 'be', preset: 'daily', move: 'bridgeMarch', tips: true, tipVoice: true });
 pref.move ??= 'bridgeMarch'; pref.tips ??= true; pref.tipVoice ??= true;
 const savePref = () => store.set('pref', pref);
@@ -31,13 +31,14 @@ function loadCal() {
 const hasCal = () => cal.max > cal.rest;
 const chanVal = (b, t) => pref.ch === 'base' ? b : pref.ch === 'tip' ? t : Math.max(b, t);
 const smooth = () => chanVal(sB, sT);
-const norm = x => hasCal() ? (x - cal.rest) / (cal.max - cal.rest) : 0;
+let zero = 0;   // shift of the relaxed reading since calibration (position, probe placement, time). Re-measured at each game start.
+const norm = x => hasCal() ? (x - cal.rest - zero) / (cal.max - cal.rest) : 0;
 function share() {        // tip share of the squeeze, for the form check
   if (!hasCal() || cal.restB == null) return null;
   const dB = sB - cal.restB, dT = sT - cal.restT, span = cal.max - cal.rest;
   return dB + dT > 0.1 * span ? M.clamp(dT / (dB + dT), 0, 1) : null;
 }
-const sample = () => ({ v: Math.max(-0.2, Math.min(1.6, norm(smooth()))), r: demo ? null : share() });
+const sample = () => ({ raw: smooth(), v: Math.max(-0.2, Math.min(1.6, norm(smooth()))), r: demo ? null : share() });
 
 // ------------------------------------------------------------ sound & voice (useful when standing with the phone on a shelf)
 let ac = null;
@@ -110,7 +111,7 @@ async function connect() {
     log('5/5 starting data'); await chr.startNotifications();
     if (dev.name) store.set('devName', dev.name);
     if (dev.id) store.set('devId', dev.id);
-    connected = true; demo = false; cal = loadCal(); status('Connected: ' + (dev.name || 'Perifit'));
+    connected = true; demo = false; zero = 0; cal = loadCal(); status('Connected: ' + (dev.name || 'Perifit'));
     msg(hasCal() ? 'Connected. Pick a game.' : `Connected. Calibrate first (${pref.pos}).`);
   } catch (e) {
     const why = (e && (e.message || e.name)) || String(e);
@@ -123,8 +124,12 @@ async function connect() {
 
 // ------------------------------------------------------------ demo: press the graph to squeeze
 const stage = $('stage');
-stage.addEventListener('pointerdown', e => { e.preventDefault(); demoDown = true; if (!connected && !demo) { demo = true; cal = { rest: 200, max: 1800, restB: 200, restT: 200 }; status('Demo mode: press = squeeze'); refresh(); } });
-addEventListener('pointerup', () => demoDown = false); addEventListener('pointercancel', () => demoDown = false);
+function demoPress(e) { if (e.cancelable) e.preventDefault(); demoDown = true; if (!connected && !demo) { demo = true; zero = 0; cal = { rest: 200, max: 1800, restB: 200, restT: 200 }; status('Demo mode: press & hold the graph = squeeze'); refresh(); } }
+const demoRelease = e => { if (e.touches && e.touches.length) return; demoDown = false; };
+stage.addEventListener('touchstart', demoPress, { passive: false });
+stage.addEventListener('touchend', demoRelease); stage.addEventListener('touchcancel', demoRelease);
+stage.addEventListener('mousedown', demoPress); addEventListener('mouseup', demoRelease);
+stage.addEventListener('contextmenu', e => e.preventDefault());
 
 // ------------------------------------------------------------ setup flows
 async function collect(sec, text) {
@@ -147,6 +152,7 @@ async function calibrate() {
   if (max - rest < 20) { msg(`Didn’t see much change (relaxed ${Math.round(rest)}, squeeze ${Math.round(max)}). Check Device & debug while squeezing.`); refresh(); show('home'); return; }
   const top = m.filter(x => x.v >= rest + 0.8 * (max - rest)), restB = med(r, x => x.b), restT = med(r, x => x.tip);
   const rS = M.median(top.map(x => { const dB = x.b - restB, dT = x.tip - restT; return dB + dT > 0 ? dT / (dB + dT) : NaN; }).filter(isFinite));
+  zero = 0;
   cal = { ...cal, rest, max, restB, restT, ch: pref.ch, rS: isFinite(rS) ? rS : null, d: new Date().toISOString() };
   delete cal.migrated;
   if (!demo) { store.set(calKey(), cal); const cl = store.get('cals', []); cl.unshift({ d: cal.d, delta: max - rest, pos: pref.pos }); store.set('cals', cl.slice(0, 200)); }
@@ -209,7 +215,7 @@ function start(id, extra = {}) {
   }
   const { preset: _p, label: _l, ...rest } = extra;
   game = GAMES[id].make({ ...optsFor(id, extra.preset), ...rest });
-  show('play'); $('gTitle').textContent = (planQ ? `${planDone + 1}/${planTotal} · ` : '') + (extra.label || GAMES[id].name); $('homeFlag').innerHTML = ''; busy = true; refresh(); beep(660);
+  show('play'); $('pb').hidden = false; $('gTitle').textContent = (planQ ? `${planDone + 1}/${planTotal} · ` : '') + (extra.label || GAMES[id].name); $('homeFlag').innerHTML = ''; busy = true; refresh(); beep(660);
 }
 function abort(text) { planQ = null; $('tip').hidden = true; if (gameMeta?.savedCal) { cal = gameMeta.savedCal; gameMeta.savedCal = null; } game = null; busy = false; show('home'); msg(text || 'Stopped. Nothing saved.'); refresh(); }
 function cues() {
@@ -227,7 +233,7 @@ function cues() {
 function finished() {
   const pos = gameMeta.pos || pref.pos;
   const res = { ...game.result, d: new Date().toISOString(), pos, stance: pos === 'standing' && gameMeta.id !== 'move' ? pref.stance : null,
-    stanceLabel: gameMeta.id === 'move' ? pos : pos === 'standing' ? STANCES[pref.stance].label : pos, calNote: gameMeta.calNote };
+    stanceLabel: gameMeta.id === 'move' ? pos : pos === 'standing' ? STANCES[pref.stance].label : pos, calNote: [gameMeta.calNote, gameMeta.zeroNote].filter(Boolean).join(' ') || null, restShift: gameMeta.restShift ?? null };
   if (gameMeta.savedCal) { cal = gameMeta.savedCal; gameMeta.savedCal = null; }
   const id = gameMeta.id; busy = false; game = null; $('tip').hidden = true;
   // apply adaptive progression
@@ -243,6 +249,36 @@ function finished() {
   save(res); showResult(res);
 }
 let pendingCheckup = null;
+const CK_STEPS = [['base', 'Rest'], ['P', 'Power'], ['E', 'Endurance'], ['break', 'Break'], ['F', 'Fast'], ['knack', 'Coughs'], ['q', 'Questions']];
+function progressBar() {
+  const total = game.tl ? game.tl.total : game.total, frac = Math.min(1, game.t / total), left = Math.max(0, total - game.t);
+  const mm = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+  $('pbFill').style.width = (frac * 100).toFixed(1) + '%';
+  let txt = `${mm} left`, steps = '';
+  const ck = game.id === 'checkup' || gameMeta.chain === 'checkup';
+  if (ck) {
+    // a rest belongs to the part it sits in: the last Rest/Power/Endurance/Break/Fast phase at or before now
+    const tag = game.id === 'knack' ? 'knack' : [...game.tl.phases.slice(0, game.tl.idx + 1)].reverse().map(p => p.tag === 'Foff' || p.tag === 'end' ? 'F' : p.tag).find(t => ['base', 'P', 'E', 'break', 'F'].includes(t));
+    const at = CK_STEPS.findIndex(c => c[0] === tag);
+    steps = CK_STEPS.map(([, l], i) => `<span class="${i < at ? 'done' : i === at ? 'now' : ''}">${l}</span>`).join('');
+    txt = game.id === 'knack' ? `Step 6 of 7 · ${mm} left, then 30 s of questions` : `Step ${at + 1} of 7 · ${mm} left in this part, then ~1 min of coughs & questions`;
+  }
+  $('pbText').textContent = txt; $('pbSteps').innerHTML = steps; $('pbSteps').hidden = !ck;
+}
+// end of the opening "relax" phase of a game (Knack: first 3 s)
+const readyEnd = g => g.tl ? g.tl.phases[0].end : 3;
+function autoZero() {
+  gameMeta.zeroed = true;
+  if (!hasCal() || SIM) return;
+  const span = cal.max - cal.rest, xs = rawBuf.filter(r => r.t >= rawBuf[rawBuf.length - 1].t - 1.5).map(r => r.x);
+  if (xs.length < 5) return;
+  const med = M.median(xs), wob = M.sd(xs) / span, shift = med - cal.rest;
+  if (wob > 0.08) { gameMeta.zeroNote = 'Couldn’t check your resting level (you weren’t still at the start), so this set uses your calibration.'; return; }
+  const old = zero; zero = M.clamp(shift, -0.6 * span, 0.6 * span);
+  gameMeta.restShift = shift / span;
+  if (Math.abs(shift) > 0.6 * span) gameMeta.zeroNote = `Your relaxed reading is far from your calibration (${Math.round(shift / span * 100)}%). Please Calibrate again in ${pref.pos} position.`;
+  else if (Math.abs(zero - old) / span > 0.1) gameMeta.zeroNote = `Re-zeroed: your relaxed reading had moved ${Math.round((zero - old) / span * 100)}% since calibration (normal after changing position or moving the probe).`;
+}
 // ------------------------------------------------------------ today's plan
 let planQ = null, planDone = 0, planTotal = 0;
 function startPlan(steps) { planQ = steps.slice(); planDone = 0; planTotal = steps.length; nextInPlan(); }
@@ -295,7 +331,7 @@ $('symForm').addEventListener('submit', e => {
 // ------------------------------------------------------------ views
 function show(v) {
   for (const x of ['home', 'result', 'symptoms']) $('v-' + x).hidden = x !== (v === 'play' ? 'none' : v);
-  const playing = v === 'play'; $('bStop').hidden = !playing; $('gTitle').hidden = !playing; $('stageCard').hidden = v === 'symptoms' || v === 'result';
+  const playing = v === 'play'; $('bStop').hidden = !playing; $('gTitle').hidden = !playing; $('pb').hidden = !playing || !game; $('stageCard').hidden = v === 'symptoms' || v === 'result';
   if (v === 'home') msg(hasCal() ? 'Pick a game.' : 'Calibrate first.');
   if (!playing) $('gTitle').textContent = '';
   window.scrollTo(0, 0);
@@ -305,6 +341,8 @@ function status(t) { $('stxt').textContent = t; }
 const gPer = () => { const ref = +$('sRef').value, d = cal.max - cal.rest; return ref > 0 && d > 0 && !demo ? ref / d : 0; };
 const fmtG = d => { const k = gPer(); return k ? Math.round(Math.max(0, d) * k) + ' g' : Math.round(Math.max(0, d)) + ' u'; };
 function refresh() {
+  $('topConn').hidden = connected || busy;
+  $('topConn').disabled = connecting; $('topConn').textContent = connecting ? 'Connecting…' : demo ? 'Connect Perifit (leave demo)' : 'Connect Perifit';
   if ($('plan')) renderPlan();
   const live = connected || demo;
   $('dot').classList.toggle('on', live);
@@ -312,6 +350,8 @@ function refresh() {
   for (const b of document.querySelectorAll('[data-game]')) b.disabled = !live || busy || !hasCal();
   for (const b of document.querySelectorAll('[data-setup]')) b.disabled = !live || busy || !hasCal();
   const guard = M.guardUsable({ rS: cal.rS, rB: cal.rB });
+  const staleCal = connected && hasCal() && (cal.migrated || !cal.d);
+  $('calWarn').hidden = !staleCal;
   $('calState').innerHTML = hasCal() ? `Calibrated for <b>${esc(pref.pos)}</b>${cal.d ? ' on ' + esc(day(cal.d)) : cal.migrated ? ' (from v1)' : ''} · max ${esc(fmtG(cal.max - cal.rest))} · form check ${guard ? 'ON' : 'off'} · cough ${cal.coughRate ? 'tuned' : 'default'}` : `Not calibrated for <b>${esc(pref.pos)}</b> yet.`;
   $('stanceWrap').hidden = pref.pos !== 'standing';
   $('sRef').value = store.get('gramsRef', '') || store.get('settings', {}).sRef || '';
@@ -338,6 +378,8 @@ function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;   // capped: a frozen screen never fast-forwards a game
   if (demo && !connected && !SIM) { const tgt = demoDown ? 1800 : 200; rawB += (tgt - rawB) * Math.min(1, dt * (demoDown ? 6 : 8)); rawT = rawB; }
   const a = Math.min(1, dt * 18); sB += (rawB - sB) * a; sT += (rawT - sT) * a;
+  rawBuf.push({ t: now / 1000, x: smooth() }); while (rawBuf.length && now / 1000 - rawBuf[0].t > 3) rawBuf.shift();
+  if (game && !game.done && !gameMeta.zeroed && game.t >= readyEnd(game) - 0.05) autoZero();
   if (game && !game.done) {
     if (SIM) {   // fixed 1/60 s substeps so fast-forwarding never skips a short phase
       const n = Math.round(dt * FAST * 60); simP ??= new Player(SIM, 1);
@@ -345,7 +387,7 @@ function loop(now) {
     } else game.step(dt, sample());
     cues();
   }
-  if (game) { const v = drawGame($('cv'), game, { big: true }); $('msg').textContent = v.msg; $('tip').hidden = !v.tip; $('tip').textContent = v.tip || ''; if (game.done) finished(); }
+  if (game) { progressBar(); const v = drawGame($('cv'), game, { big: true }); $('msg').textContent = v.msg; $('tip').hidden = !v.tip; $('tip').textContent = v.tip || ''; if (game.done) finished(); }
   else {   // idle: a simple live view so you can see the signal
     idleTrace.push({ t: now / 1000, v: hasCal() ? norm(smooth()) : 0 }); while (idleTrace.length && now / 1000 - idleTrace[0].t > 6) idleTrace.shift();
     const g = { t: now / 1000, bandAt: () => null, samples: idleTrace, view: () => ({ msg: '', inside: false, hud: {} }) };
@@ -360,13 +402,13 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ------------------------------------------------------------ wiring
-$('bConn').onclick = connect; $('bCal').onclick = calibrate;
+$('bConn').onclick = connect; $('topConn').onclick = connect; $('bCal').onclick = calibrate;
 $('bForm').onclick = formCheck; $('bCough').onclick = coughRec;
 $('bStop').onclick = () => abort();
 $('bBack').onclick = () => { planQ = null; show('home'); refresh(); };
 $('bNext').onclick = () => nextInPlan();
 $('bSym').onclick = () => openSymptoms(false);
-$('pos').value = pref.pos; $('pos').onchange = e => { pref.pos = e.target.value; savePref(); cal = demo ? cal : loadCal(); refresh(); };
+$('pos').value = pref.pos; $('pos').onchange = e => { pref.pos = e.target.value; savePref(); zero = 0; cal = demo ? cal : loadCal(); refresh(); };
 $('stance').innerHTML = Object.entries(STANCES).map(([k, s]) => `<option value="${k}" ${k === pref.stance ? 'selected' : ''}>${esc(s.label)}</option>`).join('');
 $('stance').onchange = e => { pref.stance = e.target.value; savePref(); };
 for (const [id, k] of [['sSound', 'sound'], ['sVoice', 'voice'], ['sTips', 'tips'], ['sTipVoice', 'tipVoice']]) { $(id).checked = pref[k]; $(id).onchange = e => { pref[k] = e.target.checked; savePref(); if (pref[k] && (k === 'sound' || k === 'voice')) { beep(); if (k === 'voice') say('Voice on'); } }; }

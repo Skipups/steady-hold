@@ -16,7 +16,10 @@
   <div class="status"><span class="dot" id="dot"></span><span id="stxt">Not connected</span></div>
 
   <div class="card" id="stageCard">
+    <div class="row" style="margin-bottom:10px"><button class="pri" id="topConn">Connect Perifit</button></div>
+    <p class="flag warn" id="calWarn" hidden>Your calibration is from the old version, so % numbers may be off. Tap <b>Calibrate</b> below (standing) before playing.</p>
     <h2 id="gTitle" hidden></h2>
+    <div id="pb" hidden><div class="pbar"><i id="pbFill"></i></div><div class="pbmeta"><span id="pbText"></span></div><div class="pbsteps" id="pbSteps" hidden></div></div>
     <div class="stage" id="stage"><canvas id="cv"></canvas><div class="big"><b id="pct">—</b><span>of your max</span></div></div>
     <div class="msg" id="msg" aria-live="polite">Connect your Perifit, or press and hold the graph to try demo mode.</div>
     <p class="tip" id="tip" hidden></p>
