@@ -68,3 +68,4 @@ button.inline{min-height:36px;padding:0 12px;font-size:14px;margin-left:6px;flex
 .pbmeta{font-size:13px;color:var(--mut);margin:4px 0 6px}
 .pbsteps{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}.pbsteps span{font-size:12px;padding:2px 8px;border-radius:10px;background:var(--line);color:var(--mut)}
 .pbsteps span.done{background:var(--calm);color:var(--ink)}.pbsteps span.now{background:var(--plum);color:#fff;font-weight:600}
+.ptop{display:flex;justify-content:space-between;align-items:center;gap:8px}.wk{display:flex;gap:4px}.wk i{width:10px;height:10px;border-radius:50%;background:var(--line)}.wk i.on{background:var(--ok)}

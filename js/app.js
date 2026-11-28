@@ -286,16 +286,16 @@ function nextInPlan() { const st = planQ?.shift(); if (!st) { planQ = null; retu
 function renderPlan() {
   const r = recommend(store.get('sessions', []), Date.now(), { guardOn: M.guardUsable({ rS: cal.rS, rB: cal.rB }) });
   const ready = (connected || demo) && hasCal() && !busy;
-  let h = `<h2>${esc(r.title)}</h2>`;
-  if (r.checkupDue && r.done) h += `<p class="flag info">Your monthly Check-up is due. Do it first thing tomorrow, before your first set.</p>`;
-  else if (r.checkupDue) h += `<p class="flag info">Your monthly Check-up is due. Do it at the start of a fresh day, standing, before other sets. <button class="inline" id="bPlanCk" ${ready ? '' : 'disabled'}>Start Check-up</button></p>`;
+  const dots = Array.from({ length: Math.max(r.weekGoal, Math.min(7, r.daysTrained)) }, (_, i) => `<i class="${i < r.daysTrained ? 'on' : ''}"></i>`).join('');
+  let h = `<div class="ptop"><h2>${esc(r.title)}</h2><span class="wk" title="${esc(r.week)}">${dots}</span></div>`;
   if (r.steps.length) h += `<ol class="plan">${r.steps.map(s => `<li><b>${esc(s.label)}</b><span class="note">${esc(s.why)}</span></li>`).join('')}</ol>`;
   h += r.notes.map(n => `<p class="note">• ${esc(n)}</p>`).join('');
-  if (r.steps.length) h += `<div class="row" style="margin-top:8px"><button class="pri" id="bPlan" ${ready ? '' : 'disabled'}>Start set · ~${r.minutes} min</button></div>`;
-  if (!ready) h += `<p class="note">${!(connected || demo) ? 'Connect your Perifit to start.' : !hasCal() ? 'Calibrate first.' : ''}</p>`;
+  if (r.steps.length) h += `<div class="row" style="margin-top:8px"><button class="pri" id="bPlan" ${ready ? '' : 'disabled'}>${r.checkupDay ? 'Start Check-up' : 'Start session'} · ~${r.minutes} min</button></div>`;
+  if (r.extra) h += `<div class="row" style="margin-top:8px"><button id="bExtra" ${ready ? '' : 'disabled'}>Extra set (optional) · ~4 min</button></div>`;
+  if (!ready && (r.steps.length || r.extra)) h += `<p class="note">${!(connected || demo) ? 'Connect your Perifit to start.' : !hasCal() ? 'Calibrate first.' : ''}</p>`;
   $('plan').innerHTML = h;
-  $('bPlan')?.addEventListener('click', () => startPlan(r.steps));
-  $('bPlanCk')?.addEventListener('click', () => start('checkup'));
+  $('bPlan')?.addEventListener('click', () => r.checkupDay ? start('checkup') : startPlan(r.steps));
+  $('bExtra')?.addEventListener('click', () => startPlan(r.extra));
 }
 function save(res) { if (demo && !SIM) return; const s = store.get('sessions', []); s.unshift(res); store.set('sessions', s.slice(0, 2000)); }
 function showResult(res) {
