@@ -19,7 +19,7 @@ const INFO = {
   melt: ['Squeeze for 3 s, then let go so completely that the ice cube melts. Finishes with 24 s of breathing “drops” (let the pelvic floor widen on the in-breath).', 'Release speed: letting go in 0.5 s = 100, 4 s or never = 0. Also leftover tension at 3 s and your resting level during the breathing drops.'],
   breath: ['Gentle lift (35–75%) on a 5 s out-breath, full release on a 5 s in-breath. The circle shows the breath.', 'Share of time in the right zone for each breath phase. Strained exhales score 0.'],
   knack: ['At random moments you’ll hear and see COUGH!, SNEEZE! or LAUGH!. Squeeze first, then cough, and keep holding through it.', 'A trial counts if your squeeze starts ≥ 0.2 s before the cough spike and you’re still squeezing 0.4–1.2 s after it. Head start and reaction time are tracked.'],
-  checkup: ['Once a month, always standing: 30 s rest → 3 power squeezes → 10 × 10 s holds with 4 s rest → 1 min break → 10 fast flicks → 3 Cough Shield trials → symptom questions.', 'A report card in the clinical PERFECT order: <b>P</b> best peak, <b>E</b> seconds held above half your peak, <b>R</b> holds that matched the first, <b>F</b> clean flicks. Plus release time, resting level, Knack and leak score.'],
+  checkup: ['Once a month, always standing: 30 s rest → 3 power squeezes → 10 × 10 s holds with 4 s rest → 1 min break → 10 fast flicks → 3 Cough Shield trials → symptom questions.', 'A report card in plain words: <b>Strength</b> (your best squeeze), <b>Hold time</b> (seconds above half your strongest, goal 10), <b>Repeat holds</b> (of 10, how many lasted as long as the first), <b>Quick flicks</b> (of 10 clean), plus let-go time, Cough Shield and your leak score.'],
 };
 
 let speed = 2, playerId = 'endurance';

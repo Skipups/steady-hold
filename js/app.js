@@ -249,7 +249,7 @@ function finished() {
   save(res); showResult(res);
 }
 let pendingCheckup = null;
-const CK_STEPS = [['base', 'Rest'], ['P', 'Power'], ['E', 'Endurance'], ['break', 'Break'], ['F', 'Fast'], ['knack', 'Coughs'], ['q', 'Questions']];
+const CK_STEPS = [['base', 'Rest'], ['P', 'Strength'], ['E', 'Long holds'], ['break', 'Break'], ['F', 'Fast'], ['knack', 'Coughs'], ['q', 'Questions']];
 function progressBar() {
   const total = game.tl ? game.tl.total : game.total, frac = Math.min(1, game.t / total), left = Math.max(0, total - game.t);
   const mm = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;

@@ -128,7 +128,7 @@ export const METRIC = {
   bestHold: ['Longest hold', 's', 'Longest unbroken time above target', true],
   fatigue: ['Stamina', '×', 'Last reps ÷ first reps (1.0 = no fade)', true],
   fadePerSec: ['Fade', '%/s', 'How fast a hold sags (closer to 0 is better)', true],
-  relaxMedian: ['Release time', 's', 'Time to let go after a squeeze', false],
+  relaxMedian: ['Let-go time', 's', 'Time to let go after a squeeze', false],
   relaxMissed: ['Missed releases', '', 'Rests where you never fully let go', false],
   flicks: ['Flicks landed', '', 'Quick flicks after each hold', true],
   strainReps: ['Check-your-lift reps', '', 'Reps that looked like bearing down', false],
@@ -161,10 +161,10 @@ export const METRIC = {
   reaction: ['Reaction', 's', 'Cue to squeeze', false],
   notDetected: ['Coughs not detected', '', 'Too gentle for the sensor to see', false],
   letGo: ['Let go too soon', '', 'Squeezed first but released during the cough', false],
-  power: ['P · Power', '% max', 'Best of 3 max squeezes', true],
-  endurance: ['E · Endurance', 's', 'Seconds held above half your peak (max 10)', true],
-  reps: ['R · Repetitions', '', 'Holds that matched ≥80% of the first (max 10)', true],
-  fast: ['F · Fast', '', 'Clean 1-second flicks (max 10)', true],
+  power: ['Strength (P)', '% max', 'Best of 3 max squeezes', true],
+  endurance: ['Hold time (E)', 's', 'Seconds held above half your strongest (goal 10)', true],
+  reps: ['Repeat holds (R)', '', 'Of 10 holds, how many lasted ≥80% as long as the first', true],
+  fast: ['Quick flicks (F)', '', 'Of 10, clean fast squeeze-and-let-go flicks', true],
   enduranceFatigue: ['Hold stamina', '×', 'Last holds ÷ first holds', true],
   restLevel: ['Resting level', '% max', 'Trend only. Rising over months can mean tension', false],
   restWobble: ['Resting wobble', '% max', '', false],
@@ -187,9 +187,9 @@ export function flags(res) {
 export function resultHTML(res, prev) {
   const fl = flags(res);
   let h = `<div class="res-top"><div><div class="res-title">${esc(res.title)}</div>${res.moveLabel ? `<div class="note">${esc(res.moveLabel)}</div>` : ''}${res.stanceLabel ? `<div class="note">${esc(res.stanceLabel)}</div>` : ''}</div>`;
-  h += res.perfect ? `<div class="perfect">${['P', 'E', 'R', 'F'].map(k => `<span><b>${esc(res.perfect[k])}${k === 'P' ? '%' : k === 'E' ? 's' : ''}</b>${k}</span>`).join('')}</div>`
-    : `<div class="score"><b>${esc(res.score)}</b><span>score</span></div>`;
+  h += res.perfect ? '' : `<div class="score"><b>${esc(res.score)}</b><span>score</span></div>`;
   h += '</div>';
+  if (res.perfect) h += `<div class="tiles">${ckTiles(res).map(t => `<div class="tile"><b>${esc(t.v)}</b><span class="tn">${esc(t.name)}</span><span class="note">${esc(t.what)}</span></div>`).join('')}</div>`;
   if (fl.length) h += fl.map(([k, t]) => `<p class="flag ${k}">${esc(t)}</p>`).join('');
   if (res.game === 'move' && res.reps?.length) {
     // still vs moving, rep by rep: the gap is the drop you're working to shrink
@@ -199,13 +199,26 @@ export function resultHTML(res, prev) {
   h += '<table class="mt"><tbody>';
   for (const [k, v] of Object.entries(res.metrics || {})) {
     const d = METRIC[k]; if (!d || d[4] === 'hide' || v == null) continue;
+    if (res.perfect && ['power', 'endurance', 'reps', 'fast', 'relaxMedian'].includes(k)) continue;   // already shown as tiles
     let delta = '';
     const pv = prev?.metrics?.[k];
-    if (typeof v === 'number' && typeof pv === 'number' && pv !== v) { const better = (v > pv) === d[3]; delta = `<span class="${better ? 'up' : 'down'}">${v > pv ? '▲' : '▼'}${Math.abs(+(v - pv).toFixed(2))}</span>`; }
+    if (typeof v === 'number' && typeof pv === 'number' && pv !== v) { const better = (v > pv) === d[3]; delta = `<span class="${better ? 'up' : 'down'}">${better ? 'better' : 'worse'} (was ${pv})</span>`; }
     h += `<tr><td>${esc(d[0])}${d[2] ? `<small>${esc(d[2])}</small>` : ''}</td><td>${esc(fmtVal(k, v))} ${delta}</td></tr>`;
   }
   return h + '</tbody></table>';
 }
+
+// The check-up's measures in plain words (P/E/R/F is the clinical PERFECT order, kept only as a small tag)
+export const CK_ROWS = [
+  { name: 'Strength', tag: 'P', what: 'Your strongest squeeze, vs your calibrated max', get: c => c.perfect?.P, fmt: v => v + '%', better: 1 },
+  { name: 'Hold time', tag: 'E', what: 'Seconds you held above half your strongest (goal 10 s)', get: c => c.perfect?.E, fmt: v => v + ' s', better: 1 },
+  { name: 'Repeat holds', tag: 'R', what: 'Of 10 long holds, how many lasted as long as your first', get: c => c.perfect?.R, fmt: v => v + ' of 10', better: 1 },
+  { name: 'Quick flicks', tag: 'F', what: 'Of 10 fast squeeze-and-let-go flicks, how many were clean', get: c => c.perfect?.F, fmt: v => v + ' of 10', better: 1 },
+  { name: 'Let-go time', what: 'How fast you relax after a squeeze (lower is better)', get: c => c.metrics?.relaxMedian, fmt: v => v + ' s', better: -1 },
+  { name: 'Cough Shield', what: 'Coughs where you squeezed first and held through', get: c => c.knack, fmt: v => String(v).replace('/', ' of '), better: 1 },
+  { name: 'Leak score', what: 'From your answers: 0 = no leaks, 12 = most (lower is better)', get: c => c.leak, fmt: v => v + ' of 12', better: -1 },
+];
+function ckTiles(c) { return CK_ROWS.filter(r => r.get(c) != null).map(r => ({ v: r.fmt(r.get(c)), name: r.name + (r.tag ? ` (${r.tag})` : ''), what: r.what })); }
 
 // ------------------------------------------------------------ progress
 export const KEY = { move: 'retention', hold: 'score', power: 'peak', flicks: 'validCount', elevator: 'onTarget', wave: 'onTarget', melt: 'relaxMedian', breath: 'inSync', knack: 'okCount' };
@@ -240,9 +253,14 @@ export function progressHTML(sessions, symptoms = []) {
   h += `<h3>Milestones</h3><ul class="ms">${ms.map(([t, ok]) => `<li class="${ok ? 'ok' : ''}">${ok ? '✓' : '○'} ${esc(t)}</li>`).join('')}</ul>`;
   const cks = sessions.filter(s => s.game === 'checkup');
   if (cks.length) {
-    h += '<h3>Check-ups</h3><div style="overflow-x:auto"><table class="mt"><thead><tr><th>Date</th><th>P</th><th>E</th><th>R</th><th>F</th><th>Release</th><th>Knack</th><th>Leak score</th></tr></thead><tbody>';
-    h += cks.slice(0, 12).map(c => `<tr><td>${esc(day(c.d))}</td><td>${c.perfect.P}%</td><td>${c.perfect.E}s</td><td>${c.perfect.R}</td><td>${c.perfect.F}</td><td>${c.metrics.relaxMedian ?? '–'}s</td><td>${c.knack ?? '–'}</td><td>${c.leak ?? '–'}</td></tr>`).join('');
-    h += '</tbody></table></div>';
+    const cols = cks.slice(0, 3);
+    h += `<h3>Check-ups</h3><table class="ck"><thead><tr><th></th>${cols.map((c, i) => `<th>${esc(day(c.d))}${i === 0 ? '<small>latest</small>' : ''}</th>`).join('')}</tr></thead><tbody>`;
+    h += CK_ROWS.map(r => `<tr><td><b>${esc(r.name)}</b><small>${esc(r.what)}</small></td>${cols.map((c, i) => {
+      const v = r.get(c), pv = cols[i + 1] && r.get(cols[i + 1]);
+      const arrow = typeof v === 'number' && typeof pv === 'number' && v !== pv ? ((v > pv) === (r.better > 0) ? '<small class="up">better</small>' : '<small class="down">worse</small>') : '';
+      return `<td>${v == null ? '–' : esc(r.fmt(v))}${arrow}</td>`; }).join('')}</tr>`).join('');
+    h += '</tbody></table>';
+    if (cks.length > 3) h += `<p class="note">Showing your latest 3 of ${cks.length} check-ups.</p>`;
   }
   h += '<h3>Games</h3><div class="pgrid">';
   for (const [id, g] of Object.entries(GAMES)) {

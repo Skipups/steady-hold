@@ -10,13 +10,13 @@ export const STEP = {
   daily:  { game: 'hold', preset: 'daily', label: 'Hold the Line · Daily set', why: 'Your strength work: 10 strong 8 s holds + quick flicks.' },
   move:   { game: 'move', label: 'Squeeze & Move', why: 'Your main goal: keeping the squeeze while your body works.' },
   long:   { game: 'hold', preset: 'long', label: 'Hold the Line · Long hold', why: 'Pure endurance: 60 s at a gentle 30–50%.' },
-  knack:  { game: 'knack', opts: { cues: ['cough', 'sneeze', 'cough', 'laugh'] }, label: 'Cough Shield (4 cues)', why: 'The Knack: squeeze before coughs and sneezes. Fastest way to cut leaks.' },
+  knack:  { game: 'knack', opts: { cues: ['cough', 'sneeze', 'cough', 'laugh'] }, label: 'Cough Shield (4 cues)', why: 'Practice squeezing BEFORE a cough or sneeze. The fastest way to cut those leaks.' },
   flicks: { game: 'flicks', label: 'Quick Flicks', why: 'Keeps the fast squeeze you already have.' },
   elevator: { game: 'elevator', label: 'Elevator', why: 'Control: grading your squeeze up and down.' },
   wave:   { game: 'wave', label: 'Trace the Wave', why: 'Coordination: following a moving target.' },
   power:  { game: 'power', label: 'Power Punch', why: 'Weekly strength check: try for a new record.' },
   melt:   { game: 'melt', label: 'Melt', why: 'Your recent sets showed slow or missed releases. Letting go matters as much as squeezing.' },
-  checkup:{ game: 'checkup', label: 'Monthly Check-up', why: 'Your monthly report card: P/E/R/F, Cough Shield, symptoms. Same position every time.' },
+  checkup:{ game: 'checkup', label: 'Monthly Check-up', why: 'Your monthly report card: strength, hold time, repeat holds, quick flicks, Cough Shield and symptoms.' },
 };
 
 // One session a day, 4–5 days a week (Bø: 8–12 strong holds in three series, 3–4×/week builds strength;

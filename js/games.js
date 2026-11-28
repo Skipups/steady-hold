@@ -544,6 +544,6 @@ export const GAMES = {
   wave:     { make: o => new Wave(o), name: 'Trace the Wave', quality: 'Coordination', blurb: 'Follow a moving line: swells, ramps and stairs.' },
   melt:     { make: o => new Melt(o), name: 'Melt', quality: 'Relaxation', blurb: 'Squeeze, then let go so fully the ice cube melts. Ends with breathing drops.' },
   breath:   { make: o => new Breath(o), name: 'Breath Sync', quality: 'Breath coordination', blurb: 'Lift gently on the out-breath, let go on the in-breath.' },
-  knack:    { make: o => new Knack(o), name: 'Cough Shield', quality: 'The Knack (timing)', blurb: 'Random cue: squeeze BEFORE you cough, sneeze or laugh, and hold through it.' },
-  checkup:  { make: o => new Checkup(o), name: 'Monthly Check-up', quality: 'Power · Endurance · Reps · Fast', blurb: '~6 min standardized test + symptom check. Your report card.' },
+  knack:    { make: o => new Knack(o), name: 'Cough Shield', quality: 'Squeeze before you cough', blurb: 'Random cue: squeeze BEFORE you cough, sneeze or laugh, and hold through it.' },
+  checkup:  { make: o => new Checkup(o), name: 'Monthly Check-up', quality: 'Strength · hold time · repeats · flicks', blurb: '~6 min standardized test + symptom check. Your report card.' },
 };

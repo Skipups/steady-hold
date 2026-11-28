@@ -7,7 +7,7 @@ export const PLAYERS = {
   weak:     { label: 'Early postpartum (weak, tires fast)', strength: 0.65, react: 0.4, rise: 0.25, fall: 0.2, fatigue: 0.02, noise: 0.04, residual: 0.03 },
   tight:    { label: 'Slow to relax (overactive)', strength: 0.9, react: 0.3, rise: 0.12, fall: 1.6, fatigue: 0.006, noise: 0.03, residual: 0.18 },
   strainer: { label: 'Bears down instead of lifting', strength: 1.1, react: 0.3, rise: 0.15, fall: 0.2, fatigue: 0.004, noise: 0.03, residual: 0.03, strain: true },
-  late:     { label: 'Knack: coughs before squeezing', strength: 0.9, react: 0.3, rise: 0.12, fall: 0.15, fatigue: 0.004, noise: 0.025, residual: 0.02, knackLead: -0.3 },
+  late:     { label: 'Cough Shield: coughs before squeezing', strength: 0.9, react: 0.3, rise: 0.12, fall: 0.15, fatigue: 0.004, noise: 0.025, residual: 0.02, knackLead: -0.3 },
 };
 
 export function mulberry(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
