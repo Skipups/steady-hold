@@ -30,6 +30,7 @@
   <section id="v-result" hidden>
     <div class="card" id="result"></div>
     <div class="row" style="margin-bottom:12px"><button class="pri" id="bNext" hidden>Next</button><button id="bBack">Back to games</button></div>
+    <button class="pri" id="bQuick" hidden style="width:100%;margin-bottom:12px;background:var(--ok);border-color:var(--ok)">Save backup to iCloud / Drive</button>
   </section>
 
   <section id="v-symptoms" hidden>
@@ -69,9 +70,21 @@
           <label>Sensor<select id="sCh"><option value="base">Base (matches Perifit)</option><option value="max">Max of both</option><option value="tip">Tip</option></select></label>
           <label>Perifit app strength (g)<input id="sRef" type="number" min="1" max="2000" placeholder="optional, e.g. 80"></label>
         </div>
-        <h3>Backup</h3>
-        <p class="note">Your data lives only in this browser. Export a backup now and then.</p>
-        <div class="row"><button id="bExport">Export data</button><label style="flex:1"><span class="note">Import a backup</span><input type="file" id="fImport" accept="application/json"></label></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <details id="bBox"><summary>Backup</summary>
+        <p class="note">Your data lives only in Bluefy on this phone. Save a backup file to iCloud Drive or Google Drive (pick it in the save screen), and restore it any time. Restoring merges: nothing already here is lost.</p>
+        <div class="row" style="margin:8px 0"><button class="pri" id="bSave">Save backup</button><button id="bLoad">Restore from file</button></div>
+        <input id="fIn" type="file" accept=".json,application/json" hidden>
+        <label class="chk"><input id="sAuto" type="checkbox"> After each session, show a one-tap backup button</label>
+        <p class="note" id="bNote"></p>
+        <div id="bFallback" hidden>
+          <p class="note">If no save screen or download appeared, copy this text and paste it into a note or file in iCloud/Drive:</p>
+          <textarea id="bText" readonly></textarea>
+          <button id="bCopy" style="margin-top:6px">Copy</button>
+        </div>
       </details>
     </div>
 

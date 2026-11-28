@@ -306,6 +306,8 @@ function showResult(res) {
   $('bNext').hidden = !nx; if (nx) $('bNext').textContent = `Next: ${nx.label} →`;
   $('bBack').textContent = planQ && !nx ? 'Set complete ✓ · Back' : nx ? 'End set here' : 'Back to games';
   if (planQ && !nx) { planQ = null; }
+  if (!nx && (!demo || SIM) && $('sAuto').checked) $('bQuick').hidden = false;
+  syncBackupNote();
 }
 
 // ------------------------------------------------------------ symptoms
@@ -405,7 +407,7 @@ document.addEventListener('visibilitychange', () => {
 $('bConn').onclick = connect; $('topConn').onclick = connect; $('bCal').onclick = calibrate;
 $('bForm').onclick = formCheck; $('bCough').onclick = coughRec;
 $('bStop').onclick = () => abort();
-$('bBack').onclick = () => { planQ = null; show('home'); refresh(); };
+$('bBack').onclick = () => { planQ = null; $('bQuick').hidden = true; show('home'); refresh(); };
 $('bNext').onclick = () => nextInPlan();
 $('bSym').onclick = () => openSymptoms(false);
 $('pos').value = pref.pos; $('pos').onchange = e => { pref.pos = e.target.value; savePref(); zero = 0; cal = demo ? cal : loadCal(); refresh(); };
@@ -415,13 +417,50 @@ for (const [id, k] of [['sSound', 'sound'], ['sVoice', 'voice'], ['sTips', 'tips
 $('sCh').value = pref.ch; $('sCh').onchange = e => { pref.ch = e.target.value; savePref(); msg('Sensor changed. Please calibrate again.'); cal = { rest: 0, max: 0 }; refresh(); };
 $('uEnd').value = pref.end; $('uEnd').onchange = e => { pref.end = e.target.value; savePref(); };
 $('sRef').oninput = e => { store.set('gramsRef', e.target.value); refresh(); };
-$('bExport').onclick = () => {
-  const data = {}; for (const k of ['sessions', 'symptoms', 'cals', 'history', 'gset', 'pref', 'cal:standing', 'cal:sitting', 'cal:lying']) data[k] = store.get(k, null);
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })), download: `leakproof-backup-${new Date().toISOString().slice(0, 10)}.json` });
-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+// ------------------------------------------------------------ backup (share sheet → iCloud / Drive; restore merges)
+const LIST_KEYS = ['sessions', 'symptoms', 'history', 'cals'];           // merged by date
+const ONCE_KEYS = ['cal:standing', 'cal:sitting', 'cal:lying', 'cal', 'gset', 'pref', 'devName', 'devId', 'gramsRef', 'settings'];  // only filled if missing here
+const stamp = d => new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+$('sAuto').checked = store.get('autoBackup', false);
+$('sAuto').onchange = () => store.set('autoBackup', $('sAuto').checked);
+function syncBackupNote() {
+  const last = store.get('lastBackup', ''), n = store.get('sessions', []).length + store.get('history', []).length;
+  const stale = n > 0 && (!last || Date.now() - new Date(last) > 7 * 864e5);
+  $('bNote').textContent = (last ? `Last backup: ${stamp(last)}.` : 'No backup saved yet.') + (stale ? ' It’s been a while, so consider saving one.' : '');
+  return stale;
+}
+async function saveBackup() {
+  const data = { app: 'leak-proof', version: 2, exported: new Date().toISOString() };
+  for (const k of [...LIST_KEYS, ...ONCE_KEYS]) data[k] = store.get(k, null);
+  const json = JSON.stringify(data, null, 1), name = `leak-proof-backup-${new Date().toLocaleDateString('en-CA')}.json`;
+  const done = () => { store.set('lastBackup', new Date().toISOString()); $('bQuick').hidden = true; syncBackupNote(); msg('Backup ready. Choose “Save to Files”, then iCloud Drive or Google Drive.'); };
+  try {
+    const file = new File([json], name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Leak Proof backup' }); done(); return; }
+  } catch (e) { if (e && e.name === 'AbortError') { msg('Backup not saved (cancelled).'); return; } }
+  try {
+    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: name }); document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000); done();
+  } catch {}
+  $('bText').value = json; $('bFallback').hidden = false; $('bBox').open = true;   // last resort: copy the text
+}
+$('bSave').onclick = saveBackup; $('bQuick').onclick = saveBackup;
+$('bCopy').onclick = async () => { try { await navigator.clipboard.writeText($('bText').value); $('bCopy').textContent = 'Copied'; } catch { $('bText').select(); } };
+$('bLoad').onclick = () => $('fIn').click();
+$('fIn').onchange = async () => {
+  const f = $('fIn').files[0]; $('fIn').value = ''; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    // accepts this version's backups, the one-file version's backups (app: 'leak-proof', v1) and the old "Export data" files
+    if (d.app !== 'leak-proof' && !d.sessions && !d.history) throw new Error('This file isn’t a Leak Proof backup.');
+    const merge = (a, b) => { const m = new Map(); [...(a || []), ...(b || [])].forEach(r => r && r.d && m.set(r.d, r)); return [...m.values()].sort((x, y) => String(y.d).localeCompare(String(x.d))); };
+    const before = Object.fromEntries(LIST_KEYS.map(k => [k, store.get(k, []).length]));
+    for (const k of LIST_KEYS) if (d[k]) store.set(k, merge(store.get(k, []), d[k]).slice(0, k === 'sessions' ? 2000 : 500));
+    for (const k of ONCE_KEYS) if (d[k] != null && store.get(k, null) == null) store.set(k, d[k]);
+    const added = k => store.get(k, []).length - before[k];
+    cal = demo ? cal : loadCal(); renderProgress(); refresh();
+    $('bNote').textContent = `Restored: ${added('sessions') + added('history')} new session${added('sessions') + added('history') === 1 ? '' : 's'}, ${added('symptoms')} symptom log${added('symptoms') === 1 ? '' : 's'}, ${added('cals')} calibration${added('cals') === 1 ? '' : 's'} added.`;
+  } catch (e) { $('bNote').textContent = 'Couldn’t restore: ' + ((e && e.message) || e); }
 };
-$('fImport').onchange = async e => {
-  try { const data = JSON.parse(await e.target.files[0].text()); for (const [k, v] of Object.entries(data)) if (v != null) store.set(k, v); location.reload(); }
-  catch { alert('That file could not be read as a Leak Proof backup.'); }
-};
-renderGames(); renderProgress(); refresh(); show('home'); requestAnimationFrame(loop);
+renderGames(); renderProgress(); refresh(); show('home'); if (syncBackupNote()) $('bBox').open = false; requestAnimationFrame(loop);
