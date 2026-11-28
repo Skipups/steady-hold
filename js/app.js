@@ -249,7 +249,7 @@ function finished() {
   save(res); showResult(res);
 }
 let pendingCheckup = null;
-const CK_STEPS = [['base', 'Rest'], ['P', 'Strength'], ['E', 'Long holds'], ['break', 'Break'], ['F', 'Fast'], ['knack', 'Coughs'], ['q', 'Questions']];
+const CK_STEPS = [['base', 'Rest'], ['P', 'Strength'], ['F', 'Quick flicks'], ['break', 'Break'], ['E', 'Long holds'], ['knack', 'Coughs'], ['q', 'Questions']];
 function progressBar() {
   const total = game.tl ? game.tl.total : game.total, frac = Math.min(1, game.t / total), left = Math.max(0, total - game.t);
   const mm = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
@@ -258,7 +258,7 @@ function progressBar() {
   const ck = game.id === 'checkup' || gameMeta.chain === 'checkup';
   if (ck) {
     // a rest belongs to the part it sits in: the last Rest/Power/Endurance/Break/Fast phase at or before now
-    const tag = game.id === 'knack' ? 'knack' : [...game.tl.phases.slice(0, game.tl.idx + 1)].reverse().map(p => p.tag === 'Foff' || p.tag === 'end' ? 'F' : p.tag).find(t => ['base', 'P', 'E', 'break', 'F'].includes(t));
+    const tag = game.id === 'knack' ? 'knack' : [...game.tl.phases.slice(0, game.tl.idx + 1)].reverse().map(p => p.tag === 'Foff' ? 'F' : p.tag === 'end' ? 'E' : p.tag).find(t => ['base', 'P', 'E', 'break', 'F'].includes(t));
     const at = CK_STEPS.findIndex(c => c[0] === tag);
     steps = CK_STEPS.map(([, l], i) => `<span class="${i < at ? 'done' : i === at ? 'now' : ''}">${l}</span>`).join('');
     txt = game.id === 'knack' ? `Step 6 of 7 · ${mm} left, then 30 s of questions` : `Step ${at + 1} of 7 · ${mm} left in this part, then ~1 min of coughs & questions`;

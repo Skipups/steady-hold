@@ -165,7 +165,7 @@ export const METRIC = {
   endurance: ['Hold time (E)', 's', 'Seconds held above half your strongest (goal 10)', true],
   reps: ['Repeat holds (R)', '', 'Of 10 holds, how many lasted ≥80% as long as the first', true],
   fast: ['Quick flicks (F)', '', 'Of 10, clean fast squeeze-and-let-go flicks', true],
-  enduranceFatigue: ['Hold stamina', '×', 'Last holds ÷ first holds', true],
+  stamina: ['Stamina', '%', 'Last 3 long holds vs first 3', true],
   restLevel: ['Resting level', '% max', 'Trend only. Rising over months can mean tension', false],
   restWobble: ['Resting wobble', '% max', '', false],
 };
@@ -191,6 +191,11 @@ export function resultHTML(res, prev) {
   h += '</div>';
   if (res.perfect) h += `<div class="tiles">${ckTiles(res).map(t => `<div class="tile"><b>${esc(t.v)}</b><span class="tn">${esc(t.name)}</span><span class="note">${esc(t.what)}</span></div>`).join('')}</div>`;
   if (fl.length) h += fl.map(([k, t]) => `<p class="flag ${k}">${esc(t)}</p>`).join('');
+  if (res.holds?.length) {
+    const top = Math.max(1, ...res.holds.map(x => x.level ?? 0));
+    h += `<div class="bars"><div class="note"><b>Your 10 long holds.</b> Bar = how strong each hold was. Number = seconds it stayed above half the strength of your first hold${res.metrics?.stamina != null && res.metrics.stamina < 80 ? `. Your last holds were ${res.metrics.stamina}% of your first: that’s the endurance you’re building.` : ''}</div>` +
+      res.holds.map((x, i) => `<div class="brow"><span>${i + 1}</span><div><i class="still" style="width:${Math.round(100 * (x.level ?? 0) / top)}%"></i></div><b>${esc(x.held)}s</b></div>`).join('') + '</div>';
+  }
   if (res.game === 'move' && res.reps?.length) {
     // still vs moving, rep by rep: the gap is the drop you're working to shrink
     h += `<div class="bars"><div class="note">Each rep: <span class="k still"></span> still · <span class="k mov"></span> moving</div>` + res.reps.map((r, i) =>
@@ -199,7 +204,7 @@ export function resultHTML(res, prev) {
   h += '<table class="mt"><tbody>';
   for (const [k, v] of Object.entries(res.metrics || {})) {
     const d = METRIC[k]; if (!d || d[4] === 'hide' || v == null) continue;
-    if (res.perfect && ['power', 'endurance', 'reps', 'fast', 'relaxMedian'].includes(k)) continue;   // already shown as tiles
+    if (res.perfect && ['power', 'endurance', 'reps', 'fast', 'relaxMedian', 'stamina'].includes(k)) continue;   // already shown as tiles
     let delta = '';
     const pv = prev?.metrics?.[k];
     if (typeof v === 'number' && typeof pv === 'number' && pv !== v) { const better = (v > pv) === d[3]; delta = `<span class="${better ? 'up' : 'down'}">${better ? 'better' : 'worse'} (was ${pv})</span>`; }
@@ -212,8 +217,9 @@ export function resultHTML(res, prev) {
 export const CK_ROWS = [
   { name: 'Strength', tag: 'P', what: 'Your strongest squeeze, vs your calibrated max', get: c => c.perfect?.P, fmt: v => v + '%', better: 1 },
   { name: 'Hold time', tag: 'E', what: 'Seconds you held above half your strongest (goal 10 s)', get: c => c.perfect?.E, fmt: v => v + ' s', better: 1 },
-  { name: 'Repeat holds', tag: 'R', what: 'Of 10 long holds, how many lasted as long as your first', get: c => c.perfect?.R, fmt: v => v + ' of 10', better: 1 },
-  { name: 'Quick flicks', tag: 'F', what: 'Of 10 fast squeeze-and-let-go flicks, how many were clean', get: c => c.perfect?.F, fmt: v => v + ' of 10', better: 1 },
+  { name: 'Repeat holds', tag: 'R', what: 'Of 10 long holds, how many stayed as strong and as long as your first', get: c => c.perfect?.R, fmt: v => v + ' of 10', better: 1 },
+  { name: 'Stamina', what: 'Your last 3 long holds vs your first 3 (100% = no fade)', get: c => c.metrics?.stamina, fmt: v => v + '%', better: 1 },
+  { name: 'Quick flicks', tag: 'F', what: 'Of 10 fast squeeze-and-let-go flicks (done fresh), how many were clean', get: c => c.perfect?.F, fmt: v => v + ' of 10', better: 1 },
   { name: 'Let-go time', what: 'How fast you relax after a squeeze (lower is better)', get: c => c.metrics?.relaxMedian, fmt: v => v + ' s', better: -1 },
   { name: 'Cough Shield', what: 'Coughs where you squeezed first and held through', get: c => c.knack, fmt: v => String(v).replace('/', ' of '), better: 1 },
   { name: 'Leak score', what: 'From your answers: 0 = no leaks, 12 = most (lower is better)', get: c => c.leak, fmt: v => v + ' of 12', better: -1 },

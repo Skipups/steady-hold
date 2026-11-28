@@ -27,8 +27,14 @@ check('knack: coughing before squeezing never counts', run('knack', 'late').metr
 check('knack: squeeze-then-cough counts', run('knack', 'good').metrics.okCount === 6);
 check('melt: slow relaxer scores low', run('melt', 'tight').score < 30);
 check('checkup produces a full P/E/R/F card', (r => ['P', 'E', 'R', 'F'].every(k => r.perfect[k] != null))(run('checkup', 'good')));
-console.log(fails ? `${fails} FAILURES` : 'ALL CHECKS PASSED');
 
+// ---- check-up: fading must show up ----
+{ const g = run('checkup', 'good'), e = simulate(GAMES.checkup.make({ sig }), new Player(PLAYERS.endurance, 3)).result;
+  console.log('     check-up good:', JSON.stringify(g.perfect), 'stamina', g.metrics.stamina, '| endurance-type:', JSON.stringify(e.perfect), 'stamina', e.metrics.stamina, 'holds', e.holds.map(x => x.level).join(','));
+  check('checkup: a fading player shows low stamina (<80%)', e.metrics.stamina < 80 && g.metrics.stamina >= 90);
+  check('checkup: fading holds do NOT count as repeat holds', e.perfect.R < g.perfect.R);
+  check('checkup: quick flicks are measured fresh, so endurance-type still lands most', e.perfect.F >= 7);
+  check('checkup: 10 per-hold bars are reported', e.holds.length === 10); }
 // ---- Squeeze & Move ----
 const mv = (pl, o = {}) => simulate(GAMES.move.make({ sig, ...o }), new Player(pl, 3)).result;
 check('move: a player whose squeeze sags 40% while moving keeps ≈60–75%', (r => r.metrics.retention >= 55 && r.metrics.retention <= 78)(mv(PLAYERS.endurance)));

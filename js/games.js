@@ -420,31 +420,41 @@ export class Knack {
 
 // ---------------------------------------------------------------- 9. Check-up (PERFECT-inspired monthly test)
 export class Checkup extends TimelineGame {
+  // Order: rest → strength → quick flicks (while fresh) → 1-min break → 10 long holds.
+  // Flicks used to come after the long holds, which measured tiredness instead of speed.
   constructor(o = {}) {
     const ph = [{ kind: 'ready', dur: 30, lo: 0, hi: 0.15, tag: 'base', msg: l => `Resting level: stand still, relax fully · ${Math.ceil(l)}s` }];
-    for (let r = 1; r <= 3; r++) { ph.push({ kind: 'squeeze', dur: 5, lo: 0.15, hi: Infinity, rep: r, tag: 'P', noHint: true, msg: l => `POWER ${r}/3 · max squeeze & lift · ${Math.ceil(l)}s` }); ph.push({ kind: 'relax', dur: 10, lo: 0, hi: 0.15, tag: 'rest', msg: l => `Rest · ${Math.ceil(l)}s` }); }
-    for (let r = 1; r <= 10; r++) { ph.push({ kind: 'squeeze', dur: 10, lo: 0.15, hi: Infinity, rep: r, tag: 'E', noHint: true, msg: l => `HOLD ${r}/10 · as strong as you can, as long as you can · ${Math.ceil(l)}s` }); ph.push({ kind: 'relax', dur: 4, lo: 0, hi: 0.15, tag: 'rest', msg: l => `Rest · ${Math.ceil(l)}s` }); }
-    ph.push({ kind: 'relax', dur: 60, lo: 0, hi: 0.15, tag: 'break', msg: l => `One-minute break · ${Math.ceil(l)}s` });
-    for (let r = 1; r <= 10; r++) { ph.push({ kind: 'squeeze', dur: 1, lo: 0.5, hi: Infinity, rep: r, tag: 'F', noHint: true, msg: `FAST ${r}/10 · flick!` }); ph.push({ kind: 'relax', dur: 1.2, lo: 0, hi: 0.2, tag: 'Foff', msg: 'drop' }); }
+    for (let r = 1; r <= 3; r++) { ph.push({ kind: 'squeeze', dur: 5, lo: 0.15, hi: Infinity, rep: r, tag: 'P', noHint: true, msg: l => `STRENGTH ${r} of 3 · squeeze & lift as hard as you can · ${Math.ceil(l)}s` }); ph.push({ kind: 'relax', dur: r < 3 ? 10 : 20, lo: 0, hi: 0.15, tag: 'rest', msg: l => r < 3 ? `Rest · ${Math.ceil(l)}s` : `Rest. Quick flicks next · ${Math.ceil(l)}s` }); }
+    for (let r = 1; r <= 10; r++) { ph.push({ kind: 'squeeze', dur: 1, lo: 0.5, hi: Infinity, rep: r, tag: 'F', noHint: true, msg: `QUICK FLICK ${r} of 10 · squeeze fast!` }); ph.push({ kind: 'relax', dur: 1.5, lo: 0, hi: 0.2, tag: 'Foff', msg: 'let go fully' }); }
+    ph.push({ kind: 'relax', dur: 60, lo: 0, hi: 0.15, tag: 'break', msg: l => `One-minute break. 10 long holds next · ${Math.ceil(l)}s` });
+    for (let r = 1; r <= 10; r++) { ph.push({ kind: 'squeeze', dur: 10, lo: 0.15, hi: Infinity, rep: r, tag: 'E', noHint: true, msg: l => `LONG HOLD ${r} of 10 · as strong as you can, as long as you can · ${Math.ceil(l)}s` }); ph.push({ kind: 'relax', dur: 4, lo: 0, hi: 0.15, tag: 'rest', msg: l => `Rest · ${Math.ceil(l)}s` }); }
     ph.push({ kind: 'relax', dur: 5, lo: 0, hi: 0.15, tag: 'end', msg: 'Done with the squeezes. Relax.' });
     super('checkup', 'Monthly Check-up', ph, o); this.reps = null;
   }
-  hud() { const p = this.tl.cur; return { kind: 'stage', stage: { base: 'Rest', P: 'Power', E: 'Endurance', F: 'Fast', rest: '', break: 'Break', Foff: 'Fast', end: '' }[p.tag] }; }
+  hud() { const p = this.tl.cur; return { kind: 'stage', stage: { base: 'Rest', P: 'Strength', E: 'Long holds', F: 'Quick flicks', Foff: 'Quick flicks', break: 'Break', rest: '', end: '' }[p.tag] }; }
   finish() {
     const ph = this.tl.phases, sig = this.opts.sig;
     const P = ph.filter(p => p.tag === 'P').map(p => squeezeStats(this.tl, p, { sig }));
     const best = Math.max(...P.map(p => p.peak));
-    const E = ph.filter(p => p.tag === 'E').map(p => { const pk = M.peak(p.samples)?.v ?? 0; return { pk, hold: M.longestAbove(p.samples, Math.max(0.1, pk * 0.5)) }; });
-    const e1 = E[0].hold, Rn = E.filter(e => e.hold >= 0.8 * e1 && e.pk >= 0.15).length;
-    const F = []; ph.forEach((p, i) => { if (p.tag === 'F') { const off = ph[i + 1]; const pk = M.peak([...p.samples, ...M.within(off.samples, off.start, off.start + 0.35)])?.v ?? 0; const tail = M.within(off.samples, off.start + 0.5, off.end + 0.01).map(s => s.v); F.push(pk >= 0.5 && tail.length && Math.min(...tail) <= 0.2); } });
+    // quick flicks: up past the line, then let go. The line is 50% of max, or 60% of today's strength if lower
+    // (so a calibration that overestimates your max doesn't make every flick "miss").
+    const fThr = Math.min(0.5, 0.6 * best), F = [];
+    ph.forEach((p, i) => { if (p.tag === 'F') { const off = ph[i + 1]; const pk = M.peak([...p.samples, ...M.within(off.samples, off.start, off.start + 0.35)])?.v ?? 0; const tail = M.within(off.samples, off.start + 0.5, off.end + 0.01).map(s => s.v); F.push(pk >= fThr && tail.length > 0 && Math.min(...tail) <= Math.max(0.2, 0.35 * pk)); } });
+    // long holds: every hold is judged against the FIRST hold's strength, so fading shows up
+    const Eph = ph.filter(p => p.tag === 'E');
+    const pk1 = M.peak(Eph[0].samples)?.v ?? 0, bar = Math.max(0.1, pk1 * 0.5);
+    const E = Eph.map(p => { const s = p.samples.filter(x => x.t >= p.start + 1); return { pk: M.peak(p.samples)?.v ?? 0, mean: s.length ? M.mean(s.map(x => x.v)) : 0, hold: M.longestAbove(p.samples, bar) }; });
+    const e1 = E[0].hold, Rn = E.filter(e => e1 > 0 && e.hold >= 0.8 * e1).length;
+    const stamina = M.fatigueIndex(E.map(e => e.mean));
     const rests = ph.filter(p => p.tag === 'rest').map(p => relaxStats(p, 0.6));
     const base = ph[0].samples.filter(s => s.t > 10).map(s => s.v);
     return {
-      game: 'checkup', title: this.title, score: null,
+      game: 'checkup', title: this.title, score: null, v: 2,
       perfect: { P: pct(best), E: R(e1, 1), R: Rn, F: F.filter(Boolean).length },
       metrics: { power: pct(best), timeToPeak: R(P.find(p => p.peak === best)?.ttp, 2), endurance: R(e1, 1), reps: Rn, fast: F.filter(Boolean).length,
-        enduranceFatigue: R(M.fatigueIndex(E.map(e => e.hold)), 2), relaxMedian: R(M.median(rests.map(r => r.relaxTime).filter(x => x != null)), 2),
+        stamina: stamina == null ? null : pct(stamina), relaxMedian: R(M.median(rests.map(r => r.relaxTime).filter(x => x != null)), 2),
         restLevel: pct(M.mean(base)), restWobble: pct(M.sd(base)), strainReps: P.filter(p => p.strain).length },
+      holds: E.map(e => ({ level: pct(e.mean), held: R(e.hold, 1) })),
     };
   }
 }
