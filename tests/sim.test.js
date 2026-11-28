@@ -94,3 +94,11 @@ check('plan: adds Melt when recent sets show missed releases', recommend(tightHi
 check('plan: nudges form when recent reps looked like bearing down', recommend([sess('hold', 20, { preset: 'daily', metrics: { strainReps: 2 } }), ck], T0).notes.some(n => n.includes('bearing down')));
 check('plan: counts days this week toward 4', recommend([sess('hold', 24, { preset: 'daily' }), sess('hold', 48, { preset: 'daily' }), ck], T0).week.startsWith('2 of 4'));
 console.log(fails ? `${fails} FAILURES` : 'ALL CHECKS PASSED');
+
+// ---- cache-busting: every internal reference carries the same version ----
+import { readFileSync, readdirSync } from 'fs';
+{ const txt = ['index.html', 'preview.html', ...readdirSync('js').map(f => 'js/' + f)].map(f => readFileSync(f, 'utf8')).join('\n');
+  const refs = [...txt.matchAll(/(?:from '\.\/\w+\.js|src="js\/\w+\.js|href="style\.css)(\?v=([0-9a-f]+))?/g)];
+  const vers = new Set(refs.map(m => m[2]));
+  check(`cache-busting: all ${refs.length} internal references stamped with one version (${[...vers].join(',')})`, refs.length >= 12 && vers.size === 1 && !vers.has(undefined)); }
+console.log(fails ? `${fails} FAILURES` : 'ALL CHECKS PASSED');

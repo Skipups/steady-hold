@@ -1,8 +1,8 @@
-import { GAMES, HOLD_PRESETS, STANCES, MOVES } from './games.js';
-import * as M from './metrics.js';
-import { recommend, STEP } from './plan.js';
-import { Player, PLAYERS } from './sim.js';
-import { drawGame, resultHTML, progressHTML, SYMPTOM_Q, leakScore, redFlags, METRIC, day } from './ui.js';
+import { GAMES, HOLD_PRESETS, STANCES, MOVES } from './games.js?v=fb4ddb26';
+import * as M from './metrics.js?v=fb4ddb26';
+import { recommend, STEP } from './plan.js?v=fb4ddb26';
+import { Player, PLAYERS } from './sim.js?v=fb4ddb26';
+import { drawGame, resultHTML, progressHTML, SYMPTOM_Q, leakScore, redFlags, METRIC, day } from './ui.js?v=fb4ddb26';
 
 const $ = id => document.getElementById(id);
 const qs = new URLSearchParams(location.search), SIM = PLAYERS[qs.get('sim')], FAST = Math.min(20, +qs.get('fast') || 1);
@@ -463,4 +463,16 @@ $('fIn').onchange = async () => {
     $('bNote').textContent = `Restored: ${added('sessions') + added('history')} new session${added('sessions') + added('history') === 1 ? '' : 's'}, ${added('symptoms')} symptom log${added('symptoms') === 1 ? '' : 's'}, ${added('cals')} calibration${added('cals') === 1 ? '' : 's'} added.`;
   } catch (e) { $('bNote').textContent = 'Couldn’t restore: ' + ((e && e.message) || e); }
 };
+// ------------------------------------------------------------ update check: never run a stale cached copy
+(async () => {
+  try {
+    const mine = new URL(import.meta.url).searchParams.get('v');
+    const html = await (await fetch('index.html?check=' + Date.now(), { cache: 'no-store' })).text();
+    const live = (html.match(/src="js\/app\.js\?v=([0-9a-f]+)"/) || [])[1];
+    if (mine && live && live !== mine) {
+      $('updBar').hidden = false;
+      $('updBar').onclick = () => { const u = new URL(location.href); u.searchParams.set('u', live); location.replace(u); };
+    }
+  } catch {}
+})();
 renderGames(); renderProgress(); refresh(); show('home'); if (syncBackupNote()) $('bBox').open = false; requestAnimationFrame(loop);

@@ -1,6 +1,6 @@
-import { GAMES, HOLD_PRESETS, STANCES } from './games.js';
-import { PLAYERS, Player, simulate, mulberry } from './sim.js';
-import { drawGame, resultHTML, progressHTML } from './ui.js';
+import { GAMES, HOLD_PRESETS, STANCES } from './games.js?v=fb4ddb26';
+import { PLAYERS, Player, simulate, mulberry } from './sim.js?v=fb4ddb26';
+import { drawGame, resultHTML, progressHTML } from './ui.js?v=fb4ddb26';
 
 const $ = id => document.getElementById(id);
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');

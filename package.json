@@ -1,1 +1,1 @@
-{"private":true,"type":"module","scripts":{"test":"for f in js/*.js; do node --check $f || exit 1; done && node tests/sim.test.js"}}
+{"private": true, "type": "module", "scripts": {"test": "for f in js/*.js; do node --check $f || exit 1; done && node tests/sim.test.js", "bump": "python3 scripts/bump.py"}}

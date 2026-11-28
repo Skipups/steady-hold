@@ -1,5 +1,5 @@
 // Shared rendering: game canvas, results card, progress view. Used by the app and the preview page.
-import { GAMES, STANCES } from './games.js';
+import { GAMES, STANCES } from './games.js?v=fb4ddb26';
 
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
 const probe = typeof document !== 'undefined' ? Object.assign(document.createElement('i'), { hidden: true }) : null;
