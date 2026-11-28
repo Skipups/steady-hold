@@ -113,7 +113,7 @@ class TimelineGame {
 
 // ---------------------------------------------------------------- 1. Hold the Line (and presets)
 export const HOLD_PRESETS = {
-  daily:  { label: 'Daily strength (Bø protocol)', hold: 8, rest: 6, reps: 10, lo: 0.7, band: false, flicks: 3 },
+  daily:  { label: 'Daily strength set', hold: 8, rest: 6, reps: 10, lo: 0.7, band: false, flicks: 3 },
   hold:   { label: 'Steady hold', hold: 10, rest: 10, reps: 6, lo: 0.6, band: false, flicks: 0 },
   long:   { label: 'Long hold · 60 s at 30–50%', hold: 60, rest: 10, reps: 1, lo: 0.3, hi: 0.5, band: true, flicks: 0 },
 };
@@ -147,8 +147,8 @@ export class Hold extends TimelineGame {
       score: pct(score), settings: { hold: this.c.hold, reps: this.c.reps, lo: pct(this.c.lo), band: this.c.band },
       metrics: {
         onTarget: pct(holdScore), relaxed: pct(relaxScore), avgLevel: pct(M.mean(reps.map(r => r.mean))), peak: pct(Math.max(...reps.map(r => r.peak))),
-        bestHold: R(Math.max(...reps.map(r => r.hold)), 1), fatigue: R(M.fatigueIndex(reps.map(r => r.mean)), 2),
-        fadePerSec: R(M.mean(reps.map(r => r.fade)) * 100, 1), relaxMedian: R(M.median(rests.map(r => r.relaxTime).filter(x => x != null)), 2),
+        bestHold: R(Math.max(...reps.map(r => r.hold)), 1), fatigue: R(M.fatigueIndex(reps.map(r => r.mean)), 2), stamina: (f => f == null ? null : Math.round(f * 100))(M.fatigueIndex(reps.map(r => r.mean))),
+        sag: R(Math.max(0, -M.mean(reps.map(r => r.fade)) * (this.c.hold - 1) * 100), 0), relaxMedian: R(M.median(rests.map(r => r.relaxTime).filter(x => x != null)), 2),
         relaxMissed: rests.filter(r => !r.relaxed).length, flicks: fl.length ? `${flicksOk}/${fl.length}` : null,
         strainReps: reps.filter(r => r.strain).length,
       },
@@ -156,8 +156,13 @@ export class Hold extends TimelineGame {
     };
     // progression: only when the set was clean (no straining, relaxed between reps)
     const clean = !res.metrics.strainReps && !res.metrics.relaxMissed;
-    if (score >= 0.8 && clean) res.next = this.c.band ? { hold: Math.min(90, this.c.hold + 10) } : this.c.lo < 0.85 ? { lo: Math.round((this.c.lo + 0.05) * 100) / 100 } : { hold: Math.min(12, this.c.hold + 1) };
-    else if (score < 0.5 && res.metrics.strainReps <= reps.length / 2 && holdScore < 0.5) res.next = { lo: Math.max(0.3, Math.round((this.c.lo - 0.05) * 100) / 100) };
+    // progression is judged on the holds themselves (a perfect let-go score can't mask struggling holds)
+    if (holdScore >= 0.8 && clean) res.next = this.c.band ? { hold: Math.min(90, this.c.hold + 10) } : this.c.lo < 0.85 ? { lo: Math.round((this.c.lo + 0.05) * 100) / 100 } : { hold: Math.min(12, this.c.hold + 1) };
+    else if (holdScore < 0.5 && res.metrics.strainReps <= reps.length / 2) res.next = { lo: Math.max(0.3, Math.round((this.c.lo - 0.05) * 100) / 100) };
+    // big fade across the set → more recovery between holds (research range: rest 1–2× the hold time)
+    const fi = res.metrics.fatigue;
+    if (!this.c.band && fi != null && fi < 0.6 && this.c.rest < this.c.hold * 2) res.next = { ...(res.next || {}), rest: Math.min(this.c.hold * 2, this.c.rest + 4) };
+    else if (!this.c.band && fi != null && fi > 0.9 && holdScore >= 0.8 && this.c.rest > this.c.hold) res.next = { ...(res.next || {}), rest: Math.max(this.c.hold, this.c.rest - 2) };
     return res;
   }
 }

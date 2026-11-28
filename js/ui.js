@@ -115,7 +115,7 @@ export const METRIC = {
   onTarget: ['On target', '%', 'Share of each squeeze spent inside the zone', true],
   relaxed: ['Let go between reps', '%', 'Rests where you dropped back to relaxed within 2 s', true],
   avgLevel: ['Average squeeze', '% max', 'How strong your holds were on average', true],
-  peak: ['Peak', '% max', 'Strongest moment', true],
+  peak: ['Peak', '% max', 'Strongest moment. Over 100% means you beat your calibration squeeze', true],
   retention: ['Kept while moving', '%', 'Moving squeeze ÷ still squeeze (100% = no drop)', true],
   heldThrough: ['Held through', 's', 'Seconds into the movement before the squeeze dropped below the bar', true],
   moveOnTarget: ['Moving on target', '%', 'Time at or above the bar (your set share of the still hold) while moving', true],
@@ -126,9 +126,10 @@ export const METRIC = {
   retentionFade: ['Stamina while moving', '×', 'Last reps ÷ first reps', true],
   moveArtifact: ['Movement push', '% max', 'How much the movement alone moved the reading (subtracted)', false],
   bestHold: ['Longest hold', 's', 'Longest unbroken time above target', true],
-  fatigue: ['Stamina', '×', 'Last reps ÷ first reps (1.0 = no fade)', true],
-  fadePerSec: ['Fade', '%/s', 'How fast a hold sags (closer to 0 is better)', true],
-  relaxMedian: ['Let-go time', 's', 'Time to let go after a squeeze', false],
+  fatigue: ['Stamina', '×', '', true, 'hide'],
+  fadePerSec: ['Fade', '%/s', '', true, 'hide'],
+  sag: ['Sag within a hold', 'pts', 'How many points of your max a hold dropped from start to end (0 = rock steady)', false],
+  relaxMedian: ['Let-go time', 's', 'Time to relax after a squeeze. Near 0 can also mean the hold had already faded', false],
   relaxMissed: ['Missed releases', '', 'Rests where you never fully let go', false],
   flicks: ['Flicks landed', '', 'Quick flicks after each hold', true],
   strainReps: ['Check-your-lift reps', '', 'Reps that looked like bearing down', false],
@@ -165,17 +166,19 @@ export const METRIC = {
   endurance: ['Hold time (E)', 's', 'Seconds held above half your strongest (goal 10)', true],
   reps: ['Repeat holds (R)', '', 'Of 10 holds, how many lasted ≥80% as long as the first', true],
   fast: ['Quick flicks (F)', '', 'Of 10, clean fast squeeze-and-let-go flicks', true],
-  stamina: ['Stamina', '%', 'Last 3 long holds vs first 3', true],
+  stamina: ['Stamina', '%', 'How strong your last 3 holds were compared to your first 3 (100% = no fade)', true],
   restLevel: ['Resting level', '% max', 'Trend only. Rising over months can mean tension', false],
   restWobble: ['Resting wobble', '% max', '', false],
 };
 
-const fmtVal = (k, v) => v == null ? '–' : (METRIC[k]?.[1] === '%' || METRIC[k]?.[1] === '% max') ? `${v}%` : METRIC[k]?.[1] === 's' ? `${v}s` : METRIC[k]?.[1] === '×' ? `${v}×` : METRIC[k]?.[1] === '%/s' ? `${v}%/s` : String(v);
+const fmtVal = (k, v) => v == null ? '–' : METRIC[k]?.[1] === 'pts' ? `${v} pts` : (METRIC[k]?.[1] === '%' || METRIC[k]?.[1] === '% max') ? `${v}%` : METRIC[k]?.[1] === 's' ? `${v}s` : METRIC[k]?.[1] === '×' ? `${v}×` : METRIC[k]?.[1] === '%/s' ? `${v}%/s` : String(v);
 
 export function flags(res) {
   const m = res.metrics || {}, out = [];
   if (m.strainReps) out.push(['warn', `${m.strainReps} rep${m.strainReps > 1 ? 's' : ''} looked like bearing down, not lifting. These earned no points. Think “lift up and in”, keep breathing, belly soft.`]);
   if (m.relaxMissed) out.push(['warn', `You didn’t fully let go in ${m.relaxMissed} rest${m.relaxMissed > 1 ? 's' : ''}. Letting go matters as much as squeezing. Try a few rounds of Melt.`]);
+  if (res.game === 'hold' && m.stamina != null && m.stamina < 60) out.push(['info', `Your last holds were ${m.stamina}% as strong as your first ones. That big fade is the endurance you’re working on.${res.next?.rest ? ` Next time you get ${res.next.rest} s of rest between holds to recover.` : ''}`]);
+  if (m.peak != null && m.peak > 115 && res.game !== 'power') out.push(['info', `Your peak was ${m.peak}% of your calibrated max, so your calibration squeeze wasn’t quite full effort and every % reads high. Recalibrate when you’re fresh with a true all-out squeeze.`]);
   if (m.stillFade != null && m.stillFade < 0.8) out.push(['info', `Your still hold faded ${Math.round((1 - m.stillFade) * 100)}% from the first reps to the last, so later “kept while moving” numbers look better than they are. This is the endurance you’re building. Long holds in Hold the Line train it directly.`]);
   if (m.notDetected) out.push(['info', `${m.notDetected} cough${m.notDetected > 1 ? 's' : ''} weren’t detected. Cough a bit more firmly, or redo the cough recording in Setup.`]);
   if (res.newMax) out.push(['good', `New personal max, ${Math.round(res.newMax * 100)}% of your old one. Your calibration was updated.`]);

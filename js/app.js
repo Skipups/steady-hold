@@ -241,7 +241,7 @@ function finished() {
     const k = id === 'hold' ? 'hold:' + gameMeta.preset : id === 'move' ? 'move:' + pref.move : id;
     gset[k] = { ...(gset[k] || {}), ...res.next }; store.set('gset', gset);
     const n = res.next;
-    res.nextText = n.keep != null ? `Next time: keep at least ${Math.round(n.keep * 100)}% of your still squeeze while moving.` : n.moving != null ? `Next time: ${n.moving}s moving holds.` : n.lo != null ? `Next time: target ${Math.round(n.lo * 100)}%.` : n.hold != null ? `Next time: ${n.hold}s holds.` : n.thr != null ? `Next time: flick line at ${Math.round(n.thr * 100)}%.` : n.tol != null ? `Next time: ${n.tol < 0.1 ? 'narrower' : 'wider'} band.` : '';
+    res.nextText = (n.rest != null ? `Next time: ${n.rest} s of rest between holds. ` : '') + (n.keep != null ? `Next time: keep at least ${Math.round(n.keep * 100)}% of your still squeeze while moving.` : n.moving != null ? `Next time: ${n.moving}s moving holds.` : n.lo != null ? `Next time: target ${Math.round(n.lo * 100)}%.` : n.hold != null ? `Next time: ${n.hold}s holds.` : n.thr != null ? `Next time: flick line at ${Math.round(n.thr * 100)}%.` : n.tol != null ? `Next time: ${n.tol < 0.1 ? 'narrower' : 'wider'} band.` : '');
   }
   if (res.newMax && !demo) { const d = (cal.max - cal.rest) * res.newMax; cal = { ...cal, max: cal.rest + d }; store.set(calKey(), cal); }
   if (id === 'checkup') { pendingCheckup = res; msg('Last part: 3 cued coughs (Cough Shield).'); setTimeout(() => start('knack', { cues: ['cough', 'cough', 'cough'], chain: 'checkup' }), 1500); return; }
@@ -277,7 +277,7 @@ function autoZero() {
   const old = zero; zero = M.clamp(shift, -0.6 * span, 0.6 * span);
   gameMeta.restShift = shift / span;
   if (Math.abs(shift) > 0.6 * span) gameMeta.zeroNote = `Your relaxed reading is far from your calibration (${Math.round(shift / span * 100)}%). Please Calibrate again in ${pref.pos} position.`;
-  else if (Math.abs(zero - old) / span > 0.1) gameMeta.zeroNote = `Re-zeroed: your relaxed reading had moved ${Math.round((zero - old) / span * 100)}% since calibration (normal after changing position or moving the probe).`;
+  else if (Math.abs(zero - old) / span > 0.1) gameMeta.zeroNote = `Reset “relaxed” to 0%: when relaxed, you read ${zero < old ? 'a bit lower' : 'a bit higher'} than when you calibrated (by ${Math.abs(Math.round((zero - old) / span * 100))}% of your range). Normal after moving or re-inserting the probe.`;
 }
 // ------------------------------------------------------------ today's plan
 let planQ = null, planDone = 0, planTotal = 0;

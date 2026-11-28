@@ -28,6 +28,16 @@ check('knack: squeeze-then-cough counts', run('knack', 'good').metrics.okCount =
 check('melt: slow relaxer scores low', run('melt', 'tight').score < 30);
 check('checkup produces a full P/E/R/F card', (r => ['P', 'E', 'R', 'F'].every(k => r.perfect[k] != null))(run('checkup', 'good')));
 
+// ---- her first real Daily set: strong start, fades to ~20%, lets go perfectly ----
+{ const P = { ...PLAYERS.endurance, fatigue: 0.09 };
+  const r = simulate(GAMES.hold.make({ sig, ...HOLD_PRESETS.daily }), new Player(P, 3)).result;
+  console.log('     fading daily set:', r.score, JSON.stringify(r.metrics), 'next', JSON.stringify(r.next));
+  check('hold: a big fade lowers the target even when let-go is perfect', r.next?.lo === 0.65);
+  check('hold: a big fade adds rest between holds', r.next?.rest === 10);
+  check('hold: stamina reported as a %', typeof r.metrics.stamina === 'number' && r.metrics.stamina < 60);
+  check('hold: sag reported in points (positive)', r.metrics.sag > 0);
+  const g = run('hold', 'good', HOLD_PRESETS.daily);
+  check('hold: steady player gets no extra rest', !g.next?.rest); }
 // ---- check-up: fading must show up ----
 { const g = run('checkup', 'good'), e = simulate(GAMES.checkup.make({ sig }), new Player(PLAYERS.endurance, 3)).result;
   console.log('     check-up good:', JSON.stringify(g.perfect), 'stamina', g.metrics.stamina, '| endurance-type:', JSON.stringify(e.perfect), 'stamina', e.metrics.stamina, 'holds', e.holds.map(x => x.level).join(','));
