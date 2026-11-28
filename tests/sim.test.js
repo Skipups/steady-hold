@@ -102,3 +102,8 @@ import { readFileSync, readdirSync } from 'fs';
   const vers = new Set(refs.map(m => m[2]));
   check(`cache-busting: all ${refs.length} internal references stamped with one version (${[...vers].join(',')})`, refs.length >= 12 && vers.size === 1 && !vers.has(undefined)); }
 console.log(fails ? `${fails} FAILURES` : 'ALL CHECKS PASSED');
+// ---- redo check-up: replaced ones drop out of the plan ----
+{ const T = new Date('2026-12-01T20:00:00').getTime();
+  const old = { game: 'checkup', d: new Date(T - 2 * 36e5).toISOString(), metrics: {}, replaced: new Date(T - 36e5).toISOString() };
+  check('redo: a replaced check-up is ignored by the plan (only the redo counts)', recommend([old], T).checkupDay === true); }
+console.log(fails ? `${fails} FAILURES` : 'ALL CHECKS PASSED');

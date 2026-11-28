@@ -24,7 +24,7 @@ export const STEP = {
 // workout by itself, and training first would tire you and skew the results.
 const WEEK_GOAL = 4;
 export function recommend(sessions, now = Date.now(), { guardOn = false } = {}) {
-  const S = sessions.filter(s => s.d && !s.sim);
+  const S = sessions.filter(s => s.d && !s.sim && !s.replaced);
   const today = S.filter(s => sameDay(s.d, now));
   const since = (game, f = () => true) => { const s = S.find(x => x.game === game && f(x)); return s ? (now - new Date(s.d)) / DAY : Infinity; };
   const recent = S.filter(s => now - new Date(s.d) < 3 * DAY).slice(0, 10);
@@ -41,7 +41,7 @@ export function recommend(sessions, now = Date.now(), { guardOn = false } = {}) 
   const stillFade = recent.find(s => s.game === 'move')?.metrics?.stillFade;
   const overdue = [['flicks', 3], ['elevator', 5], ['wave', 5], ['power', 7]].map(([g, d]) => [g, since(g) - d]).filter(x => x[1] >= 0).sort((a, b) => b[1] - a[1]);
 
-  if (checkupToday) return { ...base, done: true, title: 'Check-up done ✓', steps: [], extra: null,
+  if (checkupToday) return { ...base, done: true, redo: true, title: 'Check-up done ✓', steps: [], extra: null,
     notes: ['That counts as today’s session. Rest now; tomorrow it’s back to your usual session.'] };
 
   if (checkupDue && !sessionToday) return { ...base, done: false, checkupDay: true, title: 'Today: Monthly Check-up', steps: [STEP.checkup], minutes: 7,

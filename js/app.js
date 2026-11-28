@@ -1,8 +1,8 @@
-import { GAMES, HOLD_PRESETS, STANCES, MOVES } from './games.js?v=fb4ddb26';
-import * as M from './metrics.js?v=fb4ddb26';
-import { recommend, STEP } from './plan.js?v=fb4ddb26';
-import { Player, PLAYERS } from './sim.js?v=fb4ddb26';
-import { drawGame, resultHTML, progressHTML, SYMPTOM_Q, leakScore, redFlags, METRIC, day } from './ui.js?v=fb4ddb26';
+import { GAMES, HOLD_PRESETS, STANCES, MOVES } from './games.js?v=526ca366';
+import * as M from './metrics.js?v=526ca366';
+import { recommend, STEP } from './plan.js?v=526ca366';
+import { Player, PLAYERS } from './sim.js?v=526ca366';
+import { drawGame, resultHTML, progressHTML, SYMPTOM_Q, leakScore, redFlags, METRIC, day } from './ui.js?v=526ca366';
 
 const $ = id => document.getElementById(id);
 const qs = new URLSearchParams(location.search), SIM = PLAYERS[qs.get('sim')], FAST = Math.min(20, +qs.get('fast') || 1);
@@ -217,7 +217,7 @@ function start(id, extra = {}) {
   game = GAMES[id].make({ ...optsFor(id, extra.preset), ...rest });
   show('play'); $('pb').hidden = false; $('gTitle').textContent = (planQ ? `${planDone + 1}/${planTotal} · ` : '') + (extra.label || GAMES[id].name); $('homeFlag').innerHTML = ''; busy = true; refresh(); beep(660);
 }
-function abort(text) { planQ = null; $('tip').hidden = true; if (gameMeta?.savedCal) { cal = gameMeta.savedCal; gameMeta.savedCal = null; } game = null; busy = false; show('home'); msg(text || 'Stopped. Nothing saved.'); refresh(); }
+function abort(text) { redoOf = null; planQ = null; $('tip').hidden = true; if (gameMeta?.savedCal) { cal = gameMeta.savedCal; gameMeta.savedCal = null; } game = null; busy = false; show('home'); msg(text || 'Stopped. Nothing saved.'); refresh(); }
 function cues() {
   // beep + voice on phase changes so you can train standing without staring at the phone
   const v = game.view(), p = game.tl ? game.tl.idx : null;
@@ -244,11 +244,15 @@ function finished() {
     res.nextText = (n.rest != null ? `Next time: ${n.rest} s of rest between holds. ` : '') + (n.keep != null ? `Next time: keep at least ${Math.round(n.keep * 100)}% of your still squeeze while moving.` : n.moving != null ? `Next time: ${n.moving}s moving holds.` : n.lo != null ? `Next time: target ${Math.round(n.lo * 100)}%.` : n.hold != null ? `Next time: ${n.hold}s holds.` : n.thr != null ? `Next time: flick line at ${Math.round(n.thr * 100)}%.` : n.tol != null ? `Next time: ${n.tol < 0.1 ? 'narrower' : 'wider'} band.` : '');
   }
   if (res.newMax && !demo) { const d = (cal.max - cal.rest) * res.newMax; cal = { ...cal, max: cal.rest + d }; store.set(calKey(), cal); }
-  if (id === 'checkup') { pendingCheckup = res; msg('Last part: 3 cued coughs (Cough Shield).'); setTimeout(() => start('knack', { cues: ['cough', 'cough', 'cough'], chain: 'checkup' }), 1500); return; }
+  if (id === 'checkup') { pendingCheckup = res; if (redoOf) res.redoOf = redoOf; msg('Last part: 3 cued coughs (Cough Shield).'); setTimeout(() => start('knack', { cues: ['cough', 'cough', 'cough'], chain: 'checkup' }), 1500); return; }
   if (gameMeta.chain === 'checkup' && pendingCheckup) { pendingCheckup.knack = res.metrics.shielded; pendingCheckup.metrics.knackLead = res.metrics.avgLead; openSymptoms(true); return; }
   save(res); showResult(res);
 }
-let pendingCheckup = null;
+let pendingCheckup = null, redoOf = null;
+function redoCheckup() {
+  const old = store.get('sessions', []).find(s => s.game === 'checkup' && !s.replaced);
+  redoOf = old ? old.d : null; start('checkup');
+}
 const CK_STEPS = [['base', 'Rest'], ['P', 'Strength'], ['F', 'Quick flicks'], ['break', 'Break'], ['E', 'Long holds'], ['knack', 'Coughs'], ['q', 'Questions']];
 function progressBar() {
   const total = game.tl ? game.tl.total : game.total, frac = Math.min(1, game.t / total), left = Math.max(0, total - game.t);
@@ -292,12 +296,19 @@ function renderPlan() {
   h += r.notes.map(n => `<p class="note">• ${esc(n)}</p>`).join('');
   if (r.steps.length) h += `<div class="row" style="margin-top:8px"><button class="pri" id="bPlan" ${ready ? '' : 'disabled'}>${r.checkupDay ? 'Start Check-up' : 'Start session'} · ~${r.minutes} min</button></div>`;
   if (r.extra) h += `<div class="row" style="margin-top:8px"><button id="bExtra" ${ready ? '' : 'disabled'}>Extra set (optional) · ~4 min</button></div>`;
+  if (r.redo) h += `<div class="row" style="margin-top:8px"><button id="bRedoPlan" ${ready ? '' : 'disabled'}>Redo check-up</button></div><p class="note">If something went wrong (calibration, probe, a bad moment), redo it. It’s best to rest first, since you just did a full workout.</p>`;
   if (!ready && (r.steps.length || r.extra)) h += `<p class="note">${!(connected || demo) ? 'Connect your Perifit to start.' : !hasCal() ? 'Calibrate first.' : ''}</p>`;
   $('plan').innerHTML = h;
   $('bPlan')?.addEventListener('click', () => r.checkupDay ? start('checkup') : startPlan(r.steps));
   $('bExtra')?.addEventListener('click', () => startPlan(r.extra));
+  $('bRedoPlan')?.addEventListener('click', redoCheckup);
 }
-function save(res) { if (demo && !SIM) return; const s = store.get('sessions', []); s.unshift(res); store.set('sessions', s.slice(0, 2000)); }
+function save(res) {
+  if (demo && !SIM) return;
+  const s = store.get('sessions', []);
+  if (res.game === 'checkup' && res.redoOf) { for (const x of s) if (x.game === 'checkup' && x.d === res.redoOf) x.replaced = res.d; redoOf = null; }
+  s.unshift(res); store.set('sessions', s.slice(0, 2000));
+}
 function showResult(res) {
   const prev = store.get('sessions', []).find(s => s.game === res.game && s.d !== res.d && s.pos === res.pos);
   $('result').innerHTML = resultHTML(res, prev) + (demo && !SIM ? '<p class="note">Demo mode: not saved.</p>' : SIM ? '<p class="note">Simulated player: saved to the separate test store only.</p>' : '');
@@ -343,6 +354,7 @@ function status(t) { $('stxt').textContent = t; }
 const gPer = () => { const ref = +$('sRef').value, d = cal.max - cal.rest; return ref > 0 && d > 0 && !demo ? ref / d : 0; };
 const fmtG = d => { const k = gPer(); return k ? Math.round(Math.max(0, d) * k) + ' g' : Math.round(Math.max(0, d)) + ' u'; };
 function refresh() {
+  if ($('bRedoCk')) $('bRedoCk').disabled = !((connected || demo) && hasCal() && !busy);
   $('topConn').hidden = connected || busy;
   $('topConn').disabled = connecting; $('topConn').textContent = connecting ? 'Connecting…' : demo ? 'Connect Perifit (leave demo)' : 'Connect Perifit';
   if ($('plan')) renderPlan();
@@ -367,7 +379,10 @@ function renderGames() {
   $('movePick').addEventListener('change', e => { pref.move = e.target.value; savePref(); });
   for (const b of document.querySelectorAll('[data-game]')) b.addEventListener('click', () => start(b.dataset.game));
 }
-function renderProgress() { $('progress').innerHTML = progressHTML(store.get('sessions', []), store.get('symptoms', [])) + legacy(); }
+function renderProgress() {
+  $('progress').innerHTML = progressHTML(store.get('sessions', []), store.get('symptoms', [])) + legacy();
+  const b = $('bRedoCk'); if (b) { b.disabled = !((connected || demo) && hasCal() && !busy); b.onclick = redoCheckup; }
+}
 function legacy() { const h = store.get('history', []); return h.length ? `<details><summary>Older Hold sessions (v1)</summary><p class="note">${h.length} sets · latest on target ${h[0].avg}% on ${esc(day(h[0].d))}</p></details>` : ''; }
 
 // ------------------------------------------------------------ test hook: ?sim=good&fast=8 drives the app with a simulated player

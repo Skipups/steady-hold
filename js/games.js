@@ -1,7 +1,7 @@
 // Game definitions. Pure logic (no DOM) so they can be simulated in Node.
 // Every game exposes: step(dt, sample) · view() · done · result
 //   sample = {v, r}: v = squeeze as fraction of your calibrated max (0 relaxed, 1 max), r = tip share (form check)
-import * as M from './metrics.js?v=fb4ddb26';
+import * as M from './metrics.js?v=526ca366';
 
 const R = (x, d = 0) => x == null || !isFinite(x) ? null : +x.toFixed(d);
 const pct = x => x == null ? null : Math.round(x * 100);

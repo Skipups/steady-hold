@@ -1,5 +1,5 @@
 // Shared rendering: game canvas, results card, progress view. Used by the app and the preview page.
-import { GAMES, STANCES } from './games.js?v=fb4ddb26';
+import { GAMES, STANCES } from './games.js?v=526ca366';
 
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
 const probe = typeof document !== 'undefined' ? Object.assign(document.createElement('i'), { hidden: true }) : null;
@@ -243,7 +243,7 @@ function spark(vals, lowerBetter) {
 
 // Standing benchmarks from the postnatal return-to-impact guideline (Goom, Donnelly & Brockwell 2019)
 export function milestones(sessions) {
-  const st = sessions.filter(s => s.pos === 'standing');
+  const st = sessions.filter(s => s.pos === 'standing' && !s.replaced);
   const has = f => st.some(f);
   return [
     ['10 clean fast flicks standing', has(s => s.game === 'flicks' && s.metrics.validCount >= 10) || has(s => s.game === 'checkup' && s.metrics.fast >= 10)],
@@ -260,7 +260,7 @@ export function progressHTML(sessions, symptoms = []) {
   let h = '';
   const ms = milestones(sessions);
   h += `<h3>Milestones</h3><ul class="ms">${ms.map(([t, ok]) => `<li class="${ok ? 'ok' : ''}">${ok ? '✓' : '○'} ${esc(t)}</li>`).join('')}</ul>`;
-  const cks = sessions.filter(s => s.game === 'checkup');
+  const cks = sessions.filter(s => s.game === 'checkup' && !s.replaced);
   if (cks.length) {
     const cols = cks.slice(0, 3);
     h += `<h3>Check-ups</h3><table class="ck"><thead><tr><th></th>${cols.map((c, i) => `<th>${esc(day(c.d))}${i === 0 ? '<small>latest</small>' : ''}</th>`).join('')}</tr></thead><tbody>`;
@@ -270,6 +270,7 @@ export function progressHTML(sessions, symptoms = []) {
       return `<td>${v == null ? '–' : esc(r.fmt(v))}${arrow}</td>`; }).join('')}</tr>`).join('');
     h += '</tbody></table>';
     if (cks.length > 3) h += `<p class="note">Showing your latest 3 of ${cks.length} check-ups.</p>`;
+    h += `<div class="row" style="margin-top:8px"><button id="bRedoCk">Redo latest check-up (${esc(day(cks[0].d))})</button></div><p class="note">Your new result replaces this one once you finish. Stop partway and the original is kept.</p>`;
   }
   h += '<h3>Games</h3><div class="pgrid">';
   for (const [id, g] of Object.entries(GAMES)) {
